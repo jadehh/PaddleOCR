@@ -65,6 +65,9 @@ class TextDetector(object):
             postprocess_params["max_candidates"] = 1000
             postprocess_params["unclip_ratio"] = args.det_db_unclip_ratio
             postprocess_params["use_dilation"] = args.use_dilation
+            if hasattr(args, "det_db_score_mode"):
+                postprocess_params["score_mode"] = args.det_db_score_mode
+
         elif self.det_algorithm == "EAST":
             postprocess_params['name'] = 'EASTPostProcess'
             postprocess_params["score_thresh"] = args.det_east_score_thresh
@@ -183,7 +186,7 @@ class TextDetector(object):
             preds['maps'] = outputs[0]
         else:
             raise NotImplementedError
-
+        self.predictor.try_shrink_memory()
         post_result = self.postprocess_op(preds, shape_list)
         dt_boxes = post_result[0]['points']
         if self.det_algorithm == "SAST" and self.det_sast_polygon:
