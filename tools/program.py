@@ -342,10 +342,14 @@ def eval(model, valid_dataloader, post_process_class, eval_class,
     with paddle.no_grad():
         total_frame = 0.0
         total_time = 0.0
-        pbar = tqdm(total=len(valid_dataloader), desc='eval model:')
+
         max_iter = len(valid_dataloader) - 1 if platform.system(
         ) == "Windows" else len(valid_dataloader)
+        content_list = valid_dataloader.dataset.data_lines
+        root_path = valid_dataloader.dataset.data_dir
+
         for idx, batch in enumerate(valid_dataloader):
+
             if idx >= max_iter:
                 break
             images = batch[0]
@@ -363,12 +367,13 @@ def eval(model, valid_dataloader, post_process_class, eval_class,
             total_time += time.time() - start
             # Evaluate the results of the current batch
             eval_class(post_result, batch)
-            pbar.update(1)
+            print(post_result,image_path,text)
+            #pbar.update(1)
             total_frame += len(images)
         # Get final metric，eg. acc or hmean
         metric = eval_class.get_metric()
 
-    pbar.close()
+
     model.train()
     metric['fps'] = total_frame / total_time
     return metric
