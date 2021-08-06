@@ -68,6 +68,7 @@ class BaseRecLabelDecode(object):
                     self.character_str += line
             if use_space_char:
                 self.character_str += " "
+            print(self.character_str)
             dict_character = list(self.character_str)
 
         else:
@@ -369,7 +370,7 @@ if __name__ == "__main__":
     from jade import GetAllImagesPath
 
     textRecognizer = TextRecognizer("/mnt/e/Models/Paddle2.1/箱号识别模型/水平箱号识别模型/2021-07-28/2021-07-28")
-    image_list = GetAllImagesPath("/mnt/e/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH/2020-08-10/test")
+    image_list = GetAllImagesPath("/mnt/e/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH/2020-03-22/test")
     for image_path in image_list:
         image = cv2.imread(image_path)
         rec_res,elapse = textRecognizer.predict([image])

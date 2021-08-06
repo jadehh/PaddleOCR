@@ -228,7 +228,7 @@ class CTCLabelDecode(BaseRecLabelDecode):
     def __call__(self, preds, label=None, *args, **kwargs):
         preds_idx = preds.argmax(axis=2)
         preds_prob = preds.max(axis=2)
-        text = self.decode(preds_idx, preds_prob, is_remove_duplicate=True)
+        text = self.decode(preds_idx, preds_prob, is_remove_duplicate=False)
         if label is None:
             return text
         label = self.decode(label)

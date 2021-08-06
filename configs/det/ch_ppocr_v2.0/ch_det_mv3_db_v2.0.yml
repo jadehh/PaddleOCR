@@ -2,8 +2,8 @@ Global:
   use_gpu: true
   epoch_num: 1200
   log_smooth_window: 20
-  print_batch_step: 2
-  save_model_dir: /home/jade/sda2/Models/Paddle2.1/箱号箱型字符检测/
+  print_batch_step: 100
+  save_model_dir: /home/jade/sda2/Models/Paddle2.1/箱号箱型字符检测/ch_det_mv3_db_v2.0/2021-07-30
   save_epoch_step: 1200
   # evaluation is run every 5000 iterations after the 4000th iteration
   eval_batch_step: [3000, 2000]

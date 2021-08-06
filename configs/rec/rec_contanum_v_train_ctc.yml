@@ -1,9 +1,10 @@
 Global:
   use_gpu: true
+  distort: true
   epoch_num: 10000
   log_smooth_window: 20
-  print_batch_step: 10
-  save_model_dir: /home/jade/sda2/Models/Paddle2.1/箱号识别模型/水平箱号识别模型/2021-07-28
+  print_batch_step: 100
+  save_model_dir: /home/jade/sda2/Models/Paddle2.1/箱号识别模型/垂直箱号识别模型/2021-08-06
   save_epoch_step: 200
   # evaluation is run every 2000 iterations
   eval_batch_step: [0, 2000]
@@ -16,10 +17,10 @@ Global:
   # for data or label process
   character_dict_path: ppocr/utils/containernumber.txt
   character_type: ch
-  max_text_length: 11
+  max_text_length: 12
   infer_mode: False
   use_space_char: False
-  save_res_path: /home/jade/sda2/Models/Paddle2.1/箱号识别模型/水平箱号识别模型/2021-07-28/predicts_ic15.txt
+  save_res_path: /home/jade/sda2/Models/Paddle2.1/箱号识别模型/垂直箱号识别模型/2021-08-06/predicts_ic15.txt
 
 Optimizer:
   name: Adam
@@ -60,8 +61,8 @@ Metric:
 Train:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH
-    label_file_list: ["/home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH/rec_gt_train.txt"]
+    data_dir: /home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV
+    label_file_list: ["/home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV/rec_gt_train.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -81,8 +82,8 @@ Train:
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH
-    label_file_list: ["/home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH/rec_gt_test.txt"]
+    data_dir: /home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV
+    label_file_list: ["/home/jade/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV/rec_gt_test.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR

@@ -76,7 +76,7 @@ class SimpleDataSet(Dataset):
             data_line = data_line.decode('utf-8')
             substr = data_line.strip("\n").split(self.delimiter)
             file_name = substr[0]
-            label = substr[1]
+            label = substr[1].strip() ##加入去除空格字符
             img_path = os.path.join(self.data_dir, file_name)
             data = {'img_path': img_path, 'label': label}
             if not os.path.exists(img_path):

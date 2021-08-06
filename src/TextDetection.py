@@ -550,8 +550,8 @@ class TextDetector(object):
 
 if __name__ == "__main__":
     from jade import GetAllImagesPath
-    textDetector = TextDetector("/mnt/e/Models/Paddle2.1/箱号箱型字符检测/2021-07-22/2021-07-22")
-    image_list = GetAllImagesPath("/mnt/f/数据集/关键点检测数据集/箱号关键点数据集/2021-03-10")
+    textDetector = TextDetector("/mnt/e/Models/Paddle2.1/箱号箱型字符检测/ch_det_mv3_db_v2.0/2021-07-30/2021-07-30")
+    image_list = GetAllImagesPath("/mnt/f/数据集/关键点检测数据集/箱号关键点数据集/2021-01-15")
     for image_path in image_list:
         image = cv2.imread(image_path)
         dt_boxes,elapse = textDetector.predict(image)
