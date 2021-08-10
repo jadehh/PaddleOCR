@@ -22,7 +22,6 @@ from paddle_serving_app.reader import Sequential, URL2Image, ResizeByFactor
 from paddle_serving_app.reader import Div, Normalize, Transpose
 from paddle_serving_app.reader import DBPostProcess, FilterBoxes, GetRotateCropImage, SortedBoxes
 from ocr_reader import OCRReader
-from ..ocr_reader import OCRReader
 try:
     from paddle_serving_server_gpu.web_service import WebService
 except ImportError:
@@ -59,9 +58,7 @@ class OCRService(WebService):
         det_img = det_img[np.newaxis, :]
         det_img = det_img.copy()
         det_out = self.det_client.predict(
-            feed={"x": det_img},
-            fetch=["save_infer_model/scale_0.tmp_1"],
-            batch=True)
+            feed={"x": det_img}, fetch=["save_infer_model/scale_0.tmp_1"], batch=True)
         filter_func = FilterBoxes(10, 10)
         post_func = DBPostProcess({
             "thresh": 0.3,
@@ -72,8 +69,7 @@ class OCRService(WebService):
         })
         sorted_boxes = SortedBoxes()
         ratio_list = [float(new_h) / ori_h, float(new_w) / ori_w]
-        dt_boxes_list = post_func(det_out["save_infer_model/scale_0.tmp_1"],
-                                  [ratio_list])
+        dt_boxes_list = post_func(det_out["save_infer_model/scale_0.tmp_1"], [ratio_list])
         dt_boxes = filter_func(dt_boxes_list[0], [ori_h, ori_w])
         dt_boxes = sorted_boxes(dt_boxes)
         get_rotate_crop_image = GetRotateCropImage()
@@ -109,8 +105,7 @@ class OCRService(WebService):
 ocr_service = OCRService(name="ocr")
 ocr_service.load_model_config("../ppocr_rec_mobile_2.0_serving")
 ocr_service.prepare_server(workdir="workdir", port=9292)
-ocr_service.init_det_debugger(
-    det_model_config="../ppocr_det_mobile_2.0_serving")
+ocr_service.init_det_debugger(det_model_config="../ppocr_det_mobile_2.0_serving")
 if sys.argv[1] == 'gpu':
     ocr_service.set_gpus("0")
     ocr_service.run_debugger_service(gpu=True)

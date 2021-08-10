@@ -206,7 +206,7 @@ pip3 install paddle-serving-app==0.3.1
 1. 启动服务端程序
 
 ```
-cd win
+cd win 
 python3 ocr_web_server.py gpu(使用gpu方式)
 或者
 python3 ocr_web_server.py cpu(使用cpu方式)

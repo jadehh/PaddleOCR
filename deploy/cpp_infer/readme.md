@@ -18,6 +18,7 @@ PaddleOCR模型部署。
 * 首先需要从opencv官网上下载在Linux环境下源码编译的包，以opencv3.4.7为例，下载命令如下。
 
 ```
+cd deploy/cpp_infer
 wget https://github.com/opencv/opencv/archive/3.4.7.tar.gz
 tar -xf 3.4.7.tar.gz
 ```
@@ -184,7 +185,7 @@ cmake .. \
 make -j
 ```
 
-`OPENCV_DIR`为opencv编译安装的地址；`LIB_DIR`为下载(`paddle_inference`文件夹)或者编译生成的Paddle预测库地址(`build/paddle_inference_install_dir`文件夹)；`CUDA_LIB_DIR`为cuda库文件地址，在docker中为`/usr/local/cuda/lib64`；`CUDNN_LIB_DIR`为cudnn库文件地址，在docker中为`/usr/lib/x86_64-linux-gnu/`。
+`OPENCV_DIR`为opencv编译安装的地址；`LIB_DIR`为下载(`paddle_inference`文件夹)或者编译生成的Paddle预测库地址(`build/paddle_inference_install_dir`文件夹)；`CUDA_LIB_DIR`为cuda库文件地址，在docker中为`/usr/local/cuda/lib64`；`CUDNN_LIB_DIR`为cudnn库文件地址，在docker中为`/usr/lib/x86_64-linux-gnu/`。**注意**：以上路径都写绝对路径，不要写相对路径。
 
 
 * 编译完成之后，会在`build`文件夹下生成一个名为`ocr_system`的可执行文件。
@@ -228,10 +229,7 @@ char_list_file ../../ppocr/utils/ppocr_keys_v1.txt # 字典文件
 visualize 1 # 是否对结果进行可视化，为1时，会在当前文件夹下保存文件名为`ocr_vis.png`的预测结果。
 ```
 
-* PaddleOCR也支持多语言的预测，更多支持的语言和模型可以参考[识别文档](../../doc/doc_ch/recognition.md) 中的多语言字典与模型部分，
-如果希望进行多语言预测，只需将修改`tools/config.txt`中的`char_list_file`（字典文件路径）以及`rec_model_dir`（inference模型路径）字段即可。
-
-多语言模型和字典文件对应关系可以参考[文档](../../doc/doc_ch/multi_languages.md#预测部署)
+* PaddleOCR也支持多语言的预测，更多支持的语言和模型可以参考[识别文档](../../doc/doc_ch/recognition.md)中的多语言字典与模型部分，如果希望进行多语言预测，只需将修改`tools/config.txt`中的`char_list_file`（字典文件路径）以及`rec_model_dir`（inference模型路径）字段即可。
 
 最终屏幕上会输出检测结果如下。
 

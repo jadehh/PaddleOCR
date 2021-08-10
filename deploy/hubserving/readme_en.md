@@ -30,7 +30,8 @@ The following steps take the 2-stage series service as an example. If only the d
 ### 1. Prepare the environment
 ```shell
 # Install paddlehub  
-pip3 install paddlehub==1.8.3 --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
+# python>3.6.2 is required bt paddlehub
+pip3 install paddlehub==2.1.0 --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 ### 2. Download inference model
@@ -42,10 +43,6 @@ text direction classifier: ./inference/ch_ppocr_mobile_v2.0_cls_infer/
 ```  
 
 **The model path can be found and modified in `params.py`.** More models provided by PaddleOCR can be obtained from the [model library](../../doc/doc_en/models_list_en.md). You can also use models trained by yourself.
-
-* If you need to use a multi-language model, please modify the parameters of `cfg.rec_model_dir` and `cfg.rec_char_dict_path` in `ocr_rec/params.py` at the same time.
-The corresponding relationship between the multi-language model and the dictionary file can be found in [document](../../doc/doc_en/multi_languages_en.md#inference)
-
 
 ### 3. Install Service Module
 PaddleOCR provides 3 kinds of service modules, install the required modules according to your needs.

@@ -37,12 +37,7 @@ for idx, img_file in enumerate(os.listdir(test_img_dir)):
 
     image = cv2_to_base64(image_data1)
     for i in range(1):
-        data = {
-            "feed": [{
-                "image": image
-            }],
-            "fetch": ["save_infer_model/scale_0.tmp_1"]
-        }
+        data = {"feed": [{"image": image}], "fetch": ["save_infer_model/scale_0.tmp_1"]}
         r = requests.post(url=url, headers=headers, data=json.dumps(data))
         print(r.json())
 
