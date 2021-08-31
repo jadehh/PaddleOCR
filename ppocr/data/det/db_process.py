@@ -102,7 +102,8 @@ class DBProcessTrain(object):
         img_path, gt_label = self.convert_label_infor(label_infor)
         imgvalue, flag = check_and_read_gif(img_path)
         if not flag:
-            imgvalue = cv2.imread(img_path)
+            imgvalue = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), -1)
+
         if imgvalue is None:
             logger.info("{} does not exist!".format(img_path))
             return None

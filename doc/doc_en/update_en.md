@@ -1,7 +1,7 @@
 # RECENT UPDATES
 - 2020.9.22 Update the PP-OCR technical article, https://arxiv.org/abs/2009.09941
-- 2020.9.19 Update the ultra lightweight compressed ppocr_mobile_slim series models, the overall model size is 3.5M (see [PP-OCR Pipline](../../README.md#PP-OCR-Pipline)), suitable for mobile deployment. [Model Downloads](../../README.md#Supported-Chinese-model-list)
-- 2020.9.17 Update the ultra lightweight ppocr_mobile series and general ppocr_server series Chinese and English ocr models, which are comparable to commercial effects. [Model Downloads](../../README.md#Supported-Chinese-model-list)
+- 2020.9.19 Update the ultra lightweight compressed ppocr_mobile_slim series models, the overall model size is 3.5M (see [PP-OCR Pipline](../../介绍.md#PP-OCR-Pipline)), suitable for mobile deployment. [Model Downloads](../../介绍.md#Supported-Chinese-model-list)
+- 2020.9.17 Update the ultra lightweight ppocr_mobile series and general ppocr_server series Chinese and English ocr models, which are comparable to commercial effects. [Model Downloads](../../介绍.md#Supported-Chinese-model-list)
 - 2020.9.17 update [English recognition model](./models_list_en.md#english-recognition-model) and [Multilingual recognition model](./models_list_en.md#english-recognition-model), `German`, `French`, `Japanese` and `Korean` have been supported. Models for more languages will continue to be updated.
 - 2020.8.24 Support the use of PaddleOCR through whl package installation，pelease refer  [PaddleOCR Package](https://github.com/PaddlePaddle/PaddleOCR/blob/develop/doc/doc_en/whl_en.md)
 - 2020.8.16 Release text detection algorithm [SAST](https://arxiv.org/abs/1908.05498) and text recognition algorithm [SRN](https://arxiv.org/abs/2003.12294)

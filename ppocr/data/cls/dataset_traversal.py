@@ -114,7 +114,7 @@ class SimpleReader(object):
                     label = self.label_list.index(substr[1])
 
                     img_path = self.img_set_dir + "/" + substr[0]
-                    img = cv2.imread(img_path)
+                    img = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), -1)
                     if img is None:
                         logger.info("{} does not exist!".format(img_path))
                         continue
