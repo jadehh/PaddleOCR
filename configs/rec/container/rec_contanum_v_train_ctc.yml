@@ -4,7 +4,7 @@ Global:
   epoch_num: 10000
   log_smooth_window: 1
   print_batch_step: 100
-  save_model_dir: /home/samples/sda2/Models/Paddle2.1/箱号识别模型/水平箱号识别模型/CRNN-CTC/2021-08-06/
+  save_model_dir: /home/samples/sda2/Models/Paddle2.1/箱号识别模型/垂直箱号识别模型/CRNN-CTC/2021-08-11/
   save_epoch_step: 200
   # evaluation is run every 2000 iterations
   eval_batch_step: [0, 2000]
@@ -20,7 +20,7 @@ Global:
   max_text_length: 11
   infer_mode: False
   use_space_char: False
-  save_res_path: /home/samples/sda2/Models/Paddle2.1/箱号识别模型/水平箱号识别模型/CRNN-CTC/2021-08-06/predicts_ic15.txt
+  save_res_path: /home/samples/sda2/Models/Paddle2.1/箱号识别模型/垂直箱号识别模型/CRNN-CTC/2021-08-11//predicts_ic15.txt
 
 Optimizer:
   name: Adam
@@ -61,8 +61,8 @@ Metric:
 Train:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH
-    label_file_list: ["/home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH/rec_gt_train.txt"]
+    data_dir: /home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV
+    label_file_list: ["/home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV/rec_gt_train.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -83,9 +83,9 @@ Train:
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH
-    label_file_list: ["/home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRH/rec_gt_test.txt"]
-    transforms: 
+    data_dir: /home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV
+    label_file_list: ["/home/samples/sda2/Data/OCR/ContainerOCR/2021-03-10/OCR/OCRV/rec_gt_test.txt"]
+    transforms:
       - DecodeImage: # load image
           img_mode: BGR
           channel_first: False
