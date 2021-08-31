@@ -1,10 +1,12 @@
-# PaddleOCR
+# PaddleOCR 
 
 ## 环境安装
 
 ```bash
-pip install paddle1.8
+pip install paddlepaddle_gpu-1.8.5.post107
+pip install shapely
 pip install imgaug
+pip install pyclipper
 ```
 
 ## 训练车牌检测模型
