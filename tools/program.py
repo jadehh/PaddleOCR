@@ -28,9 +28,9 @@ logger = initial_logger()
 import paddle.fluid as fluid
 import time
 from ppocr.utils.stats import TrainingStats
-from eval_utils.eval_det_utils import eval_det_run
-from eval_utils.eval_rec_utils import eval_rec_run
-from eval_utils.eval_cls_utils import eval_cls_run
+from tools.eval_utils.eval_det_utils import eval_det_run
+from tools.eval_utils.eval_rec_utils import eval_rec_run
+from tools.eval_utils.eval_cls_utils import eval_cls_run
 from ppocr.utils.save_load import save_model
 import numpy as np
 from ppocr.utils.character import cal_predicts_accuracy, cal_predicts_accuracy_srn, CharacterOps
@@ -320,7 +320,7 @@ def train_eval_det_run(config,
                         best_eval_hmean = hmean
                         best_batch_id = train_batch_id
                         best_epoch = epoch
-                        save_path = save_model_dir + "/best_accuracy"
+                        save_path = save_model_dir + "/best_model"
                         if is_slim is None:
                             save_model(train_info_dict['train_program'],
                                        save_path)
@@ -465,7 +465,7 @@ def train_eval_rec_run(config,
                         best_eval_acc = eval_acc
                         best_batch_id = train_batch_id
                         best_epoch = epoch
-                        save_path = save_model_dir + "/best_accuracy"
+                        save_path = save_model_dir + "/best_model"
                         if is_slim is None:
                             save_model(train_info_dict['train_program'],
                                        save_path)
@@ -588,7 +588,7 @@ def train_eval_cls_run(config,
                         best_eval_acc = eval_acc
                         best_batch_id = train_batch_id
                         best_epoch = epoch
-                        save_path = save_model_dir + "/best_accuracy"
+                        save_path = save_model_dir + "/best_model"
                         if is_slim is None:
                             save_model(train_info_dict['train_program'],
                                        save_path)

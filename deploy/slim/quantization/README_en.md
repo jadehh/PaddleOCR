@@ -48,7 +48,7 @@ python deploy/slim/quantization/quant.py -c configs/det/det_mv3_db.yml -o Global
 # download provided model
 wget https://paddleocr.bj.bcebos.com/20-09-22/mobile/det/ch_ppocr_mobile_v1.1_det_train.tar
 tar xf ch_ppocr_mobile_v1.1_det_train.tar
-python deploy/slim/quantization/quant.py -c configs/det/det_mv3_db.yml -o Global.pretrain_weights=./ch_ppocr_mobile_v1.1_det_train/best_accuracy   Global.save_model_dir=./output/quant_model
+python deploy/slim/quantization/quant.py -c configs/det/det_mv3_db.yml -o Global.pretrain_weights=./ch_ppocr_mobile_v1.1_det_train/best_model   Global.save_model_dir=./output/quant_model
 
 ```
 
@@ -58,7 +58,7 @@ python deploy/slim/quantization/quant.py -c configs/det/det_mv3_db.yml -o Global
 After getting the model after pruning and finetuning we, can export it as inference_model for predictive deployment:
 
 ```bash
-python deploy/slim/quantization/export_model.py -c configs/det/det_mv3_db.yml -o Global.checkpoints=output/quant_model/best_accuracy Global.save_model_dir=./output/quant_inference_model
+python deploy/slim/quantization/export_model.py -c configs/det/det_mv3_db.yml -o Global.checkpoints=output/quant_model/best_model Global.save_model_dir=./output/quant_inference_model
 ```
 
 ### 5. Deploy
