@@ -6,7 +6,7 @@
 # @Email    : jadehh@1ive.com
 # @Software : Samples
 # @Desc     :
-from src.TextDetection import TextDetector
+from src.DBTextDetector import TextDetector
 from jade import *
 def get_image_path(root_path):
     image_path_list = []

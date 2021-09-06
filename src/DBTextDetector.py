@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @File     : TextDetection.py.py
+# @File     : DBTextDetector.py.py
 # @Author   : jade
 # @Date     : 2021/9/1 9:27
 # @Email    : jadehh@1ive.com
