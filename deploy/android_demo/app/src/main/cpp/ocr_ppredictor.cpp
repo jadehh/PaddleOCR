@@ -119,13 +119,36 @@ std::vector<OCRPredictResult> OCR_PPredictor::infer_rec(
                     scale);
 
     std::vector<PredictorOutput> results = _rec_predictor->infer();
+    const float *predict_batch = results.at(0).get_float_data();
+    const std::vector<int64_t> predict_shape = results.at(0).get_shape();
 
     OCRPredictResult res;
-    res.word_index = postprocess_rec_word_index(results.at(0));
+
+    // ctc decode
+    int argmax_idx;
+    int last_index = 0;
+    float score = 0.f;
+    int count = 0;
+    float max_value = 0.0f;
+
+    for (int n = 0; n < predict_shape[1]; n++) {
+      argmax_idx = int(argmax(&predict_batch[n * predict_shape[2]],
+                              &predict_batch[(n + 1) * predict_shape[2]]));
+      max_value =
+          float(*std::max_element(&predict_batch[n * predict_shape[2]],
+                                  &predict_batch[(n + 1) * predict_shape[2]]));
+      if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
+        score += max_value;
+        count += 1;
+        res.word_index.push_back(argmax_idx);
+      }
+      last_index = argmax_idx;
+    }
+    score /= count;
     if (res.word_index.empty()) {
       continue;
     }
-    res.score = postprocess_rec_score(results.at(1));
+    res.score = score;
     res.points = box;
     ocr_results.emplace_back(std::move(res));
   }
@@ -156,19 +179,18 @@ cv::Mat OCR_PPredictor::infer_cls(const cv::Mat &img, float thresh) {
   std::vector<PredictorOutput> results = _cls_predictor->infer();
 
   const float *scores = results.at(0).get_float_data();
-  const int *labels = results.at(1).get_int_data();
+  float score = 0;
+  int label = 0;
   for (int64_t i = 0; i < results.at(0).get_size(); i++) {
     LOGI("output scores [%f]", scores[i]);
+    if (scores[i] > score) {
+      score = scores[i];
+      label = i;
+    }
   }
-  for (int64_t i = 0; i < results.at(1).get_size(); i++) {
-    LOGI("output label [%d]", labels[i]);
-  }
-  int label_idx = labels[0];
-  float score = scores[label_idx];
-
   cv::Mat srcimg;
   img.copyTo(srcimg);
-  if (label_idx % 2 == 1 && score > thresh) {
+  if (label % 2 == 1 && score > thresh) {
     cv::rotate(srcimg, srcimg, 1);
   }
   return srcimg;

@@ -26,7 +26,7 @@ After training, if you want to further compress the model size and accelerate th
 
 ```bash
 git clone https://github.com/PaddlePaddle/PaddleSlim.git
-cd Paddleslim
+cd PaddlSlim
 python setup.py install
 ```
 
@@ -41,15 +41,14 @@ Quantization training includes offline quantization training and online quantiza
 Online quantization training is more effective. It is necessary to load the pre-training model.
 After the quantization strategy is defined, the model can be quantified.
 
-The code for quantization training is located in `slim/quantization/quant/py`. For example, to train a detection model, the training instructions are as follows:
+The code for quantization training is located in `slim/quantization/quant.py`. For example, to train a detection model, the training instructions are as follows:
 ```bash
-python deploy/slim/quantization/quant.py -c configs/det/det_mv3_db.yml -o Global.pretrain_weights='your trained model'   Global.save_model_dir=./output/quant_model
+python deploy/slim/quantization/quant.py -c configs/det/ch_ppocr_v2.0/ch_det_mv3_db_v2.0.yml -o Global.pretrained_model='your trained model'   Global.save_model_dir=./output/quant_model
 
 # download provided model
-wget https://paddleocr.bj.bcebos.com/20-09-22/mobile/det/ch_ppocr_mobile_v1.1_det_train.tar
-tar xf ch_ppocr_mobile_v1.1_det_train.tar
-python deploy/slim/quantization/quant.py -c configs/det/det_mv3_db.yml -o Global.pretrain_weights=./ch_ppocr_mobile_v1.1_det_train/best_model   Global.save_model_dir=./output/quant_model
-
+wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_det_train.tar
+tar -xf ch_ppocr_mobile_v2.0_det_train.tar
+python deploy/slim/quantization/quant.py -c configs/det/ch_ppocr_v2.0/ch_det_mv3_db_v2.0.yml -o Global.pretrained_model=./ch_ppocr_mobile_v2.0_det_train/best_accuracy   Global.save_model_dir=./output/quant_model
 ```
 
 
@@ -58,11 +57,11 @@ python deploy/slim/quantization/quant.py -c configs/det/det_mv3_db.yml -o Global
 After getting the model after pruning and finetuning we, can export it as inference_model for predictive deployment:
 
 ```bash
-python deploy/slim/quantization/export_model.py -c configs/det/det_mv3_db.yml -o Global.checkpoints=output/quant_model/best_model Global.save_model_dir=./output/quant_inference_model
+python deploy/slim/quantization/export_model.py -c configs/det/ch_ppocr_v2.0/ch_det_mv3_db_v2.0.yml -o Global.checkpoints=output/quant_model/best_accuracy Global.save_inference_dir=./output/quant_inference_model
 ```
 
 ### 5. Deploy
 The numerical range of the quantized model parameters derived from the above steps is still FP32, but the numerical range of the parameters is int8.
 The derived model can be converted through the `opt tool` of PaddleLite.
 
-For quantitative model deployment, please refer to [Mobile terminal model deployment](../lite/readme_en.md)
+For quantitative model deployment, please refer to [Mobile terminal model deployment](../../lite/readme_en.md)

@@ -1,4 +1,5 @@
-project(ocr_system CXX C)
+project(ppocr CXX C)
+cmake_minimum_required(VERSION 3.14)
 
 option(WITH_MKL        "Compile demo with MKL/OpenBlas support, default use MKL."       ON)
 option(WITH_GPU        "Compile demo with GPU/CPU, default use CPU."                    OFF)
@@ -11,7 +12,7 @@ SET(CUDA_LIB "" CACHE PATH "Location of libraries")
 SET(CUDNN_LIB "" CACHE PATH "Location of libraries")
 SET(TENSORRT_DIR "" CACHE PATH "Compile demo with TensorRT")
 
-set(DEMO_NAME "ocr_system")
+set(DEMO_NAME "ppocr")
 
 
 macro(safe_set_static_flag)
@@ -38,9 +39,8 @@ endif()
 
 
 if (WIN32)
-  include_directories("${PADDLE_LIB}/paddle/fluid/inference")
   include_directories("${PADDLE_LIB}/paddle/include")
-  link_directories("${PADDLE_LIB}/paddle/fluid/inference")
+  link_directories("${PADDLE_LIB}/paddle/lib")
   find_package(OpenCV REQUIRED PATHS ${OPENCV_DIR}/build/ NO_DEFAULT_PATH)
 
 else ()
@@ -52,20 +52,29 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 
 if (WIN32)
     add_definitions("/DGOOGLE_GLOG_DLL_DECL=")
-    set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} /bigobj /MTd")
-    set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} /bigobj /MT")
-    set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} /bigobj /MTd")
-    set(CMAKE_CXX_FLAGS_RELEASE   "${CMAKE_CXX_FLAGS_RELEASE} /bigobj /MT")
+    if(WITH_MKL)
+        set(FLAG_OPENMP "/openmp")
+    endif()
+    set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} /bigobj /MTd ${FLAG_OPENMP}")
+    set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} /bigobj /MT ${FLAG_OPENMP}")
+    set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} /bigobj /MTd ${FLAG_OPENMP}")
+    set(CMAKE_CXX_FLAGS_RELEASE   "${CMAKE_CXX_FLAGS_RELEASE} /bigobj /MT ${FLAG_OPENMP}")
     if (WITH_STATIC_LIB)
         safe_set_static_flag()
         add_definitions(-DSTATIC_LIB)
     endif()
+    message("cmake c debug flags " ${CMAKE_C_FLAGS_DEBUG})
+    message("cmake c release flags " ${CMAKE_C_FLAGS_RELEASE})
+    message("cmake cxx debug flags " ${CMAKE_CXX_FLAGS_DEBUG})
+    message("cmake cxx release flags " ${CMAKE_CXX_FLAGS_RELEASE})
 else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -o3 -std=c++11")
+    if(WITH_MKL)
+        set(FLAG_OPENMP "-fopenmp")
+    endif()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -o3 ${FLAG_OPENMP} -std=c++11")
     set(CMAKE_STATIC_LIBRARY_PREFIX "")
+    message("cmake cxx flags" ${CMAKE_CXX_FLAGS})
 endif()
-message("flags" ${CMAKE_CXX_FLAGS})
-
 
 if (WITH_GPU)
     if (NOT DEFINED CUDA_LIB OR ${CUDA_LIB} STREQUAL "")
@@ -124,21 +133,35 @@ if(WITH_MKL)
     endif ()
   endif()
 else()
-  set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/libopenblas${CMAKE_STATIC_LIBRARY_SUFFIX})
+  if (WIN32)
+    set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/openblas${CMAKE_STATIC_LIBRARY_SUFFIX})
+  else ()
+    set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/libopenblas${CMAKE_STATIC_LIBRARY_SUFFIX})
+  endif ()
 endif()
 
-# Note: libpaddle_inference_api.so/a must put before libpaddle_fluid.so/a
+# Note: libpaddle_inference_api.so/a must put before libpaddle_inference.so/a
 if(WITH_STATIC_LIB)
-  set(DEPS
-      ${PADDLE_LIB}/paddle/lib/libpaddle_fluid${CMAKE_STATIC_LIBRARY_SUFFIX})
+  if(WIN32)
+    set(DEPS
+        ${PADDLE_LIB}/paddle/lib/paddle_inference${CMAKE_STATIC_LIBRARY_SUFFIX})
+  else()
+    set(DEPS
+        ${PADDLE_LIB}/paddle/lib/libpaddle_inference${CMAKE_STATIC_LIBRARY_SUFFIX})
+  endif()
 else()
-  set(DEPS
-      ${PADDLE_LIB}/paddle/lib/libpaddle_fluid${CMAKE_SHARED_LIBRARY_SUFFIX})
-endif()
+  if(WIN32)
+    set(DEPS
+        ${PADDLE_LIB}/paddle/lib/paddle_inference${CMAKE_SHARED_LIBRARY_SUFFIX})
+  else()
+    set(DEPS
+        ${PADDLE_LIB}/paddle/lib/libpaddle_inference${CMAKE_SHARED_LIBRARY_SUFFIX})
+  endif()
+endif(WITH_STATIC_LIB)
 
 if (NOT WIN32)
     set(DEPS ${DEPS}
-        ${MATH_LIB} ${MKLDNN_LIB} 
+        ${MATH_LIB} ${MKLDNN_LIB}
         glog gflags protobuf z xxhash
         )
     if(EXISTS "${PADDLE_LIB}/third_party/install/snappystream/lib")
@@ -184,9 +207,12 @@ endif()
 
 set(DEPS ${DEPS} ${OpenCV_LIBS})
 
+include(FetchContent)
+include(external-cmake/auto-log.cmake)
+include_directories(${FETCHCONTENT_BASE_DIR}/extern_autolog-src)
+
 AUX_SOURCE_DIRECTORY(./src SRCS)
 add_executable(${DEMO_NAME} ${SRCS})
-
 target_link_libraries(${DEMO_NAME} ${DEPS})
 
 if (WIN32 AND WITH_MKL)

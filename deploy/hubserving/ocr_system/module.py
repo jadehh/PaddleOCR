@@ -3,24 +3,23 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import ast
-import copy
-import math
 import os
+import sys
+sys.path.insert(0, ".")
+import copy
+
 import time
 
-from paddle.fluid.core import AnalysisConfig, create_paddle_predictor, PaddleTensor
 from paddlehub.common.logger import logger
 from paddlehub.module.module import moduleinfo, runnable, serving
-from PIL import Image
 import cv2
 import numpy as np
-import paddle.fluid as fluid
 import paddlehub as hub
 
 from tools.infer.utility import base64_to_cv2
 from tools.infer.predict_system import TextSystem
+from tools.infer.utility import parse_args
+from deploy.hubserving.ocr_system.params import read_params
 
 
 @moduleinfo(
@@ -35,8 +34,7 @@ class OCRSystem(hub.Module):
         """
         initialize with the necessary elements
         """
-        from ocr_system.params import read_params
-        cfg = read_params()
+        cfg = self.merge_configs()
 
         cfg.use_gpu = use_gpu
         if use_gpu:
@@ -52,8 +50,22 @@ class OCRSystem(hub.Module):
                 )
         cfg.ir_optim = True
         cfg.enable_mkldnn = enable_mkldnn
-        
+
         self.text_sys = TextSystem(cfg)
+
+    def merge_configs(self, ):
+        # deafult cfg
+        backup_argv = copy.deepcopy(sys.argv)
+        sys.argv = sys.argv[:1]
+        cfg = parse_args()
+
+        update_cfg_map = vars(read_params())
+
+        for key in update_cfg_map:
+            cfg.__setattr__(key, update_cfg_map[key])
+
+        sys.argv = copy.deepcopy(backup_argv)
+        return cfg
 
     def read_images(self, paths=[]):
         images = []
@@ -67,9 +79,7 @@ class OCRSystem(hub.Module):
             images.append(img)
         return images
 
-    def predict(self,
-                       images=[],
-                       paths=[]):
+    def predict(self, images=[], paths=[]):
         """
         Get the chinese texts in the predicted images.
         Args:
@@ -104,13 +114,11 @@ class OCRSystem(hub.Module):
 
             for dno in range(dt_num):
                 text, score = rec_res[dno]
-                rec_res_final.append(
-                    {
-                        'text': text,
-                        'confidence': float(score),
-                        'text_region': dt_boxes[dno].astype(np.int).tolist()
-                    }
-                )
+                rec_res_final.append({
+                    'text': text,
+                    'confidence': float(score),
+                    'text_region': dt_boxes[dno].astype(np.int).tolist()
+                })
             all_results.append(rec_res_final)
         return all_results
 
@@ -123,7 +131,7 @@ class OCRSystem(hub.Module):
         results = self.predict(images_decode, **kwargs)
         return results
 
-   
+
 if __name__ == '__main__':
     ocr = OCRSystem()
     image_path = [

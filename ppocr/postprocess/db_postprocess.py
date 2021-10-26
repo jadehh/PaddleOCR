@@ -16,12 +16,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import paddle
-import paddle.fluid as fluid
-
 import numpy as np
-import string
 import cv2
+import paddle
 from shapely.geometry import Polygon
 import pyclipper
 
@@ -31,13 +28,26 @@ class DBPostProcess(object):
     The post process for Differentiable Binarization (DB).
     """
 
-    def __init__(self, params):
-        self.thresh = params['thresh']
-        self.box_thresh = params['box_thresh']
-        self.max_candidates = params['max_candidates']
-        self.unclip_ratio = params['unclip_ratio']
+    def __init__(self,
+                 thresh=0.3,
+                 box_thresh=0.7,
+                 max_candidates=1000,
+                 unclip_ratio=2.0,
+                 use_dilation=False,
+                 score_mode="fast",
+                 **kwargs):
+        self.thresh = thresh
+        self.box_thresh = box_thresh
+        self.max_candidates = max_candidates
+        self.unclip_ratio = unclip_ratio
         self.min_size = 3
-        self.dilation_kernel = np.array([[1, 1], [1, 1]])
+        self.score_mode = score_mode
+        assert score_mode in [
+            "slow", "fast"
+        ], "Score mode must be in [slow, fast] but got: {}".format(score_mode)
+
+        self.dilation_kernel = None if not use_dilation else np.array(
+            [[1, 1], [1, 1]])
 
     def boxes_from_bitmap(self, pred, _bitmap, dest_width, dest_height):
         '''
@@ -56,16 +66,19 @@ class DBPostProcess(object):
             contours, _ = outs[0], outs[1]
 
         num_contours = min(len(contours), self.max_candidates)
-        boxes = np.zeros((num_contours, 4, 2), dtype=np.int16)
-        scores = np.zeros((num_contours, ), dtype=np.float32)
 
+        boxes = []
+        scores = []
         for index in range(num_contours):
             contour = contours[index]
             points, sside = self.get_mini_boxes(contour)
             if sside < self.min_size:
                 continue
             points = np.array(points)
-            score = self.box_score_fast(pred, points.reshape(-1, 2))
+            if self.score_mode == "fast":
+                score = self.box_score_fast(pred, points.reshape(-1, 2))
+            else:
+                score = self.box_score_slow(pred, contour)
             if self.box_thresh > score:
                 continue
 
@@ -74,17 +87,14 @@ class DBPostProcess(object):
             if sside < self.min_size + 2:
                 continue
             box = np.array(box)
-            if not isinstance(dest_width, int):
-                dest_width = dest_width.item()
-                dest_height = dest_height.item()
 
             box[:, 0] = np.clip(
                 np.round(box[:, 0] / width * dest_width), 0, dest_width)
             box[:, 1] = np.clip(
                 np.round(box[:, 1] / height * dest_height), 0, dest_height)
-            boxes[index, :, :] = box.astype(np.int16)
-            scores[index] = score
-        return boxes, scores
+            boxes.append(box.astype(np.int16))
+            scores.append(score)
+        return np.array(boxes, dtype=np.int16), scores
 
     def unclip(self, box):
         unclip_ratio = self.unclip_ratio
@@ -119,6 +129,9 @@ class DBPostProcess(object):
         return box, min(bounding_box[1])
 
     def box_score_fast(self, bitmap, _box):
+        '''
+        box_score_fast: use bbox mean score as the mean score
+        '''
         h, w = bitmap.shape[:2]
         box = _box.copy()
         xmin = np.clip(np.floor(box[:, 0].min()).astype(np.int), 0, w - 1)
@@ -132,29 +145,71 @@ class DBPostProcess(object):
         cv2.fillPoly(mask, box.reshape(1, -1, 2).astype(np.int32), 1)
         return cv2.mean(bitmap[ymin:ymax + 1, xmin:xmax + 1], mask)[0]
 
-    def __call__(self, outs_dict, ratio_list):
-        pred = outs_dict['maps']
+    def box_score_slow(self, bitmap, contour):
+        '''
+        box_score_slow: use polyon mean score as the mean score
+        '''
+        h, w = bitmap.shape[:2]
+        contour = contour.copy()
+        contour = np.reshape(contour, (-1, 2))
 
+        xmin = np.clip(np.min(contour[:, 0]), 0, w - 1)
+        xmax = np.clip(np.max(contour[:, 0]), 0, w - 1)
+        ymin = np.clip(np.min(contour[:, 1]), 0, h - 1)
+        ymax = np.clip(np.max(contour[:, 1]), 0, h - 1)
+
+        mask = np.zeros((ymax - ymin + 1, xmax - xmin + 1), dtype=np.uint8)
+
+        contour[:, 0] = contour[:, 0] - xmin
+        contour[:, 1] = contour[:, 1] - ymin
+
+        cv2.fillPoly(mask, contour.reshape(1, -1, 2).astype(np.int32), 1)
+        return cv2.mean(bitmap[ymin:ymax + 1, xmin:xmax + 1], mask)[0]
+
+    def __call__(self, outs_dict, shape_list):
+        pred = outs_dict['maps']
+        if isinstance(pred, paddle.Tensor):
+            pred = pred.numpy()
         pred = pred[:, 0, :, :]
         segmentation = pred > self.thresh
 
         boxes_batch = []
         for batch_index in range(pred.shape[0]):
-            height, width = pred.shape[-2:]
+            src_h, src_w, ratio_h, ratio_w = shape_list[batch_index]
+            if self.dilation_kernel is not None:
+                mask = cv2.dilate(
+                    np.array(segmentation[batch_index]).astype(np.uint8),
+                    self.dilation_kernel)
+            else:
+                mask = segmentation[batch_index]
+            boxes, scores = self.boxes_from_bitmap(pred[batch_index], mask,
+                                                   src_w, src_h)
 
-            mask = cv2.dilate(np.array(segmentation[batch_index]).astype(np.uint8), self.dilation_kernel)
-            tmp_boxes, tmp_scores = self.boxes_from_bitmap(pred[batch_index], mask, width, height)
-
-            boxes = []
-            for k in range(len(tmp_boxes)):
-                if tmp_scores[k] > self.box_thresh:
-                    boxes.append(tmp_boxes[k])
-            if len(boxes) > 0:
-                boxes = np.array(boxes)
-
-                ratio_h, ratio_w = ratio_list[batch_index]
-                boxes[:, :, 0] = boxes[:, :, 0] / ratio_w
-                boxes[:, :, 1] = boxes[:, :, 1] / ratio_h
-
-            boxes_batch.append(boxes)
+            boxes_batch.append({'points': boxes})
         return boxes_batch
+
+
+class DistillationDBPostProcess(object):
+    def __init__(self, model_name=["student"],
+                 key=None,
+                 thresh=0.3,
+                 box_thresh=0.6,
+                 max_candidates=1000,
+                 unclip_ratio=1.5,
+                 use_dilation=False,
+                 score_mode="fast",
+                 **kwargs):
+        self.model_name = model_name
+        self.key = key
+        self.post_process = DBPostProcess(thresh=thresh,
+                 box_thresh=box_thresh,
+                 max_candidates=max_candidates,
+                 unclip_ratio=unclip_ratio,
+                 use_dilation=use_dilation,
+                 score_mode=score_mode)
+
+    def __call__(self, predicts, shape_list):
+        results = {}
+        for k in self.model_name:
+            results[k] = self.post_process(predicts[k], shape_list=shape_list)
+        return results

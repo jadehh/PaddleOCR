@@ -37,7 +37,7 @@ public class MiniActivity extends AppCompatActivity {
     protected HandlerThread worker = null; // Worker thread to load&run model
     protected volatile Predictor predictor = null;
 
-    private String assetModelDirPath = "models/ocr_v1_for_cpu";
+    private String assetModelDirPath = "models/ocr_v2_for_cpu";
     private String assetlabelFilePath = "labels/ppocr_keys_v1.txt";
 
     private Button button;
@@ -131,7 +131,7 @@ public class MiniActivity extends AppCompatActivity {
      */
     private boolean onRunModel() {
         try {
-            String assetImagePath = "images/5.jpg";
+            String assetImagePath = "images/0.jpg";
             InputStream imageStream = getAssets().open(assetImagePath);
             Bitmap image = BitmapFactory.decodeStream(imageStream);
             // Input is Bitmap

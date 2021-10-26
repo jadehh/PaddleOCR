@@ -119,9 +119,9 @@ public class Predictor {
 
         OCRPredictorNative.Config config = new OCRPredictorNative.Config();
         config.cpuThreadNum = cpuThreadNum;
-        config.detModelFilename = realPath + File.separator + "ch_det_mv3_db_opt.nb";
-        config.recModelFilename = realPath + File.separator + "ch_rec_mv3_crnn_opt.nb";
-        config.clsModelFilename = realPath + File.separator + "cls_opt_arm.nb";
+        config.detModelFilename = realPath + File.separator + "ch_ppocr_mobile_v2.0_det_opt.nb";
+        config.recModelFilename = realPath + File.separator + "ch_ppocr_mobile_v2.0_rec_opt.nb";
+        config.clsModelFilename = realPath + File.separator + "ch_ppocr_mobile_v2.0_cls_opt.nb";
         Log.e("Predictor", "model path" + config.detModelFilename + " ; " + config.recModelFilename + ";" + config.clsModelFilename);
         config.cpuPower = cpuPowerMode;
         paddlePredictor = new OCRPredictorNative(config);
@@ -135,7 +135,7 @@ public class Predictor {
 
     public void releaseModel() {
         if (paddlePredictor != null) {
-            paddlePredictor.release();
+            paddlePredictor.destory();
             paddlePredictor = null;
         }
         isLoaded = false;
@@ -147,6 +147,7 @@ public class Predictor {
 
     protected boolean loadLabel(Context appCtx, String labelPath) {
         wordLabels.clear();
+        wordLabels.add("black");
         // Load word labels from file
         try {
             InputStream assetsInputStream = appCtx.getAssets().open(labelPath);
@@ -193,26 +194,25 @@ public class Predictor {
                         "supported!");
                 return false;
             }
-            int[] channelStride = new int[]{width * height, width * height * 2};
-            int p = scaleImage.getPixel(scaleImage.getWidth() - 1, scaleImage.getHeight() - 1);
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    int color = scaleImage.getPixel(x, y);
-                    float[] rgb = new float[]{(float) red(color) / 255.0f, (float) green(color) / 255.0f,
-                            (float) blue(color) / 255.0f};
-                    inputData[y * width + x] = (rgb[channelIdx[0]] - inputMean[0]) / inputStd[0];
-                    inputData[y * width + x + channelStride[0]] = (rgb[channelIdx[1]] - inputMean[1]) / inputStd[1];
-                    inputData[y * width + x + channelStride[1]] = (rgb[channelIdx[2]] - inputMean[2]) / inputStd[2];
 
-                }
+            int[] channelStride = new int[]{width * height, width * height * 2};
+            int[] pixels=new int[width*height];
+            scaleImage.getPixels(pixels,0,scaleImage.getWidth(),0,0,scaleImage.getWidth(),scaleImage.getHeight());
+            for (int i = 0; i < pixels.length; i++) {
+                int color = pixels[i];
+                float[] rgb = new float[]{(float) red(color) / 255.0f, (float) green(color) / 255.0f,
+                        (float) blue(color) / 255.0f};
+                inputData[i] = (rgb[channelIdx[0]] - inputMean[0]) / inputStd[0];
+                inputData[i + channelStride[0]] = (rgb[channelIdx[1]] - inputMean[1]) / inputStd[1];
+                inputData[i+ channelStride[1]] = (rgb[channelIdx[2]] - inputMean[2]) / inputStd[2];
             }
         } else if (channels == 1) {
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    int color = inputImage.getPixel(x, y);
-                    float gray = (float) (red(color) + green(color) + blue(color)) / 3.0f / 255.0f;
-                    inputData[y * width + x] = (gray - inputMean[0]) / inputStd[0];
-                }
+            int[] pixels=new int[width*height];
+            scaleImage.getPixels(pixels,0,scaleImage.getWidth(),0,0,scaleImage.getWidth(),scaleImage.getHeight());
+            for (int i = 0; i < pixels.length; i++) {
+                int color = pixels[i];
+                float gray = (float) (red(color) + green(color) + blue(color)) / 3.0f / 255.0f;
+                inputData[i] = (gray - inputMean[0]) / inputStd[0];
             }
         } else {
             Log.i(TAG, "Unsupported channel size " + Integer.toString(channels) + ",  only channel 1 and 3 is " +

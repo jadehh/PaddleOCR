@@ -137,14 +137,17 @@ cv::Mat RunClsModel(cv::Mat img, std::shared_ptr<PaddlePredictor> predictor_cls,
   // Get output and run postprocess
   std::unique_ptr<const Tensor> softmax_out(
       std::move(predictor_cls->GetOutput(0)));
-  std::unique_ptr<const Tensor> label_out(
-      std::move(predictor_cls->GetOutput(1)));
   auto *softmax_scores = softmax_out->mutable_data<float>();
-  auto *label_idxs = label_out->data<int64>();
-  int label_idx = label_idxs[0];
-  float score = softmax_scores[label_idx];
-
-  if (label_idx % 2 == 1 && score > thresh) {
+  auto softmax_out_shape = softmax_out->shape();
+  float score = 0;
+  int label = 0;
+  for (int i = 0; i < softmax_out_shape[1]; i++) {
+    if (softmax_scores[i] > score) {
+      score = softmax_scores[i];
+      label = i;
+    }
+  }
+  if (label % 2 == 1 && score > thresh) {
     cv::rotate(srcimg, srcimg, 1);
   }
   return srcimg;
@@ -191,53 +194,32 @@ void RunRecModel(std::vector<std::vector<std::vector<int>>> boxes, cv::Mat img,
     // Get output and run postprocess
     std::unique_ptr<const Tensor> output_tensor0(
         std::move(predictor_crnn->GetOutput(0)));
-    auto *rec_idx = output_tensor0->data<int64>();
+    auto *predict_batch = output_tensor0->data<float>();
+    auto predict_shape = output_tensor0->shape();
 
-    auto rec_idx_lod = output_tensor0->lod();
-    auto shape_out = output_tensor0->shape();
-
-    std::vector<int> pred_idx;
-    for (int n = static_cast<int>(rec_idx_lod[0][0]);
-         n < static_cast<int>(rec_idx_lod[0][1]); n += 1) {
-      pred_idx.push_back(static_cast<int>(rec_idx[n]));
-    }
-
-    if (pred_idx.size() < 1e-3)
-      continue;
-
-    index += 1;
-    std::string pred_txt = "";
-    for (int n = 0; n < pred_idx.size(); n++) {
-      pred_txt += charactor_dict[pred_idx[n]];
-    }
-    rec_text.push_back(pred_txt);
-
-    ////get score
-    std::unique_ptr<const Tensor> output_tensor1(
-        std::move(predictor_crnn->GetOutput(1)));
-    auto *predict_batch = output_tensor1->data<float>();
-    auto predict_shape = output_tensor1->shape();
-
-    auto predict_lod = output_tensor1->lod();
-
-    int blank = predict_shape[1];
+    // ctc decode
+    std::string str_res;
+    int argmax_idx;
+    int last_index = 0;
     float score = 0.f;
     int count = 0;
+    float max_value = 0.0f;
 
-    for (int n = predict_lod[0][0]; n < predict_lod[0][1] - 1; n++) {
-      int argmax_idx =
-          static_cast<int>(Argmax(&predict_batch[n * predict_shape[1]],
-                                  &predict_batch[(n + 1) * predict_shape[1]]));
-      float max_value =
-          float(*std::max_element(&predict_batch[n * predict_shape[1]],
-                                  &predict_batch[(n + 1) * predict_shape[1]]));
-
-      if (blank - 1 - argmax_idx > 1e-5) {
+    for (int n = 0; n < predict_shape[1]; n++) {
+      argmax_idx = int(Argmax(&predict_batch[n * predict_shape[2]],
+                              &predict_batch[(n + 1) * predict_shape[2]]));
+      max_value =
+          float(*std::max_element(&predict_batch[n * predict_shape[2]],
+                                  &predict_batch[(n + 1) * predict_shape[2]]));
+      if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
         score += max_value;
         count += 1;
+        str_res += charactor_dict[argmax_idx];
       }
+      last_index = argmax_idx;
     }
     score /= count;
+    rec_text.push_back(str_res);
     rec_text_score.push_back(score);
   }
 }
@@ -247,6 +229,7 @@ RunDetModel(std::shared_ptr<PaddlePredictor> predictor, cv::Mat img,
             std::map<std::string, double> Config) {
   // Read img
   int max_side_len = int(Config["max_side_len"]);
+  int det_db_use_dilate = int(Config["det_db_use_dilate"]);
 
   cv::Mat srcimg;
   img.copyTo(srcimg);
@@ -290,13 +273,17 @@ RunDetModel(std::shared_ptr<PaddlePredictor> predictor, cv::Mat img,
                    reinterpret_cast<float *>(pred));
 
   const double threshold = double(Config["det_db_thresh"]) * 255;
-  const double maxvalue = 255;
+  const double max_value = 255;
   cv::Mat bit_map;
-  cv::threshold(cbuf_map, bit_map, threshold, maxvalue, cv::THRESH_BINARY);
-  cv::Mat dilation_map;
-  cv::Mat dila_ele = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
-  cv::dilate(bit_map, dilation_map, dila_ele);
-  auto boxes = BoxesFromBitmap(pred_map, dilation_map, Config);
+  cv::threshold(cbuf_map, bit_map, threshold, max_value, cv::THRESH_BINARY);
+  if (det_db_use_dilate == 1) {
+    cv::Mat dilation_map;
+    cv::Mat dila_ele =
+        cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
+    cv::dilate(bit_map, dilation_map, dila_ele);
+    bit_map = dilation_map;
+  }
+  auto boxes = BoxesFromBitmap(pred_map, bit_map, Config);
 
   std::vector<std::vector<std::vector<int>>> filter_boxes =
       FilterTagDetRes(boxes, ratio_hw[0], ratio_hw[1], srcimg);
@@ -391,6 +378,7 @@ int main(int argc, char **argv) {
   auto cls_predictor = loadModel(cls_model_file);
 
   auto charactor_dict = ReadDict(dict_path);
+  charactor_dict.insert(charactor_dict.begin(), "#"); // blank char for ctc
   charactor_dict.push_back(" ");
 
   cv::Mat srcimg = cv::imread(img_path, cv::IMREAD_COLOR);

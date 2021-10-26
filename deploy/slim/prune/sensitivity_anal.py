@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,98 +18,130 @@ from __future__ import print_function
 
 import os
 import sys
+
 __dir__ = os.path.dirname(__file__)
 sys.path.append(__dir__)
 sys.path.append(os.path.join(__dir__, '..', '..', '..'))
 sys.path.append(os.path.join(__dir__, '..', '..', '..', 'tools'))
 
-import json
-import cv2
-from paddle import fluid
-import paddleslim as slim
-from copy import deepcopy
-from tools.eval_utils.eval_det_utils import eval_det_run
-
-from tools import program
-from ppocr.utils.utility import initial_logger
-from ppocr.data.reader_main import reader_main
+import paddle
+import paddle.distributed as dist
+from ppocr.data import build_dataloader
+from ppocr.modeling.architectures import build_model
+from ppocr.losses import build_loss
+from ppocr.optimizer import build_optimizer
+from ppocr.postprocess import build_post_process
+from ppocr.metrics import build_metric
 from ppocr.utils.save_load import init_model
-from ppocr.utils.character import CharacterOps
-from ppocr.utils.utility import create_module
-from ppocr.data.reader_main import reader_main
+import tools.program as program
 
-logger = initial_logger()
+dist.get_world_size()
 
 
-def get_pruned_params(program):
+def get_pruned_params(parameters):
     params = []
-    for param in program.global_block().all_parameters():
+
+    for param in parameters:
         if len(
                 param.shape
-        ) == 4 and 'depthwise' not in param.name and 'transpose' not in param.name:
+        ) == 4 and 'depthwise' not in param.name and 'transpose' not in param.name and "conv2d_57" not in param.name and "conv2d_56" not in param.name:
             params.append(param.name)
     return params
 
 
-def eval_function(eval_args, mode='eval'):
-    exe = eval_args['exe']
-    config = eval_args['config']
-    eval_info_dict = eval_args['eval_info_dict']
-    metrics = eval_det_run(exe, config, eval_info_dict, mode=mode)
-    return metrics['hmean']
+def main(config, device, logger, vdl_writer):
+    # init dist environment
+    if config['Global']['distributed']:
+        dist.init_parallel_env()
 
+    global_config = config['Global']
 
-def main():
-    config = program.load_config(FLAGS.config)
-    program.merge_config(FLAGS.opt)
-    logger.info(config)
+    # build dataloader
+    train_dataloader = build_dataloader(config, 'Train', device, logger)
+    if config['Eval']:
+        valid_dataloader = build_dataloader(config, 'Eval', device, logger)
+    else:
+        valid_dataloader = None
 
-    # check if set use_gpu=True in paddlepaddle cpu version
-    use_gpu = config['Global']['use_gpu']
-    program.check_gpu(use_gpu)
+    # build post process
+    post_process_class = build_post_process(config['PostProcess'],
+                                            global_config)
 
-    alg = config['Global']['algorithm']
-    assert alg in ['EAST', 'DB', 'Rosetta', 'CRNN', 'STARNet', 'RARE']
-    if alg in ['Rosetta', 'CRNN', 'STARNet', 'RARE']:
-        config['Global']['char_ops'] = CharacterOps(config['Global'])
+    # build model
+    # for rec algorithm
+    if hasattr(post_process_class, 'character'):
+        char_num = len(getattr(post_process_class, 'character'))
+        config['Architecture']["Head"]['out_channels'] = char_num
+    model = build_model(config['Architecture'])
 
-    place = fluid.CUDAPlace(0) if use_gpu else fluid.CPUPlace()
-    startup_prog = fluid.Program()
-    eval_program = fluid.Program()
-    eval_build_outputs = program.build(
-        config, eval_program, startup_prog, mode='test')
-    eval_fetch_name_list = eval_build_outputs[1]
-    eval_fetch_varname_list = eval_build_outputs[2]
-    eval_program = eval_program.clone(for_test=True)
-    exe = fluid.Executor(place)
-    exe.run(startup_prog)
+    flops = paddle.flops(model, [1, 3, 640, 640])
+    logger.info("FLOPs before pruning: {}".format(flops))
 
-    init_model(config, eval_program, exe)
+    from paddleslim.dygraph import FPGMFilterPruner
+    model.train()
+    pruner = FPGMFilterPruner(model, [1, 3, 640, 640])
 
-    eval_reader = reader_main(config=config, mode="eval")
-    eval_info_dict = {'program':eval_program,\
-        'reader':eval_reader,\
-        'fetch_name_list':eval_fetch_name_list,\
-        'fetch_varname_list':eval_fetch_varname_list}
-    eval_args = dict()
-    eval_args = {'exe': exe, 'config': config, 'eval_info_dict': eval_info_dict}
-    metrics = eval_function(eval_args)
-    print("Baseline: {}".format(metrics))
+    # build loss
+    loss_class = build_loss(config['Loss'])
 
-    params = get_pruned_params(eval_program)
-    print('Start to analyze')
-    sens_0 = slim.prune.sensitivity(
-        eval_program,
-        place,
-        params,
-        eval_function,
-        sensitivities_file="sensitivities_0.data",
-        pruned_ratios=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
-        eval_args=eval_args,
-        criterion='geometry_median')
+    # build optim
+    optimizer, lr_scheduler = build_optimizer(
+        config['Optimizer'],
+        epochs=config['Global']['epoch_num'],
+        step_each_epoch=len(train_dataloader),
+        parameters=model.parameters())
+
+    # build metric
+    eval_class = build_metric(config['Metric'])
+    # load pretrain model
+    pre_best_model_dict = init_model(config, model, logger, optimizer)
+
+    logger.info('train dataloader has {} iters, valid dataloader has {} iters'.
+                format(len(train_dataloader), len(valid_dataloader)))
+    # build metric
+    eval_class = build_metric(config['Metric'])
+
+    logger.info('train dataloader has {} iters, valid dataloader has {} iters'.
+                format(len(train_dataloader), len(valid_dataloader)))
+
+    def eval_fn():
+        metric = program.eval(model, valid_dataloader, post_process_class,
+                              eval_class, False)
+        logger.info("metric['hmean']: {}".format(metric['hmean']))
+        return metric['hmean']
+
+    params_sensitive = pruner.sensitive(
+        eval_func=eval_fn,
+        sen_file="./sen.pickle",
+        skip_vars=[
+            "conv2d_57.w_0", "conv2d_transpose_2.w_0", "conv2d_transpose_3.w_0"
+        ])
+
+    logger.info(
+        "The sensitivity analysis results of model parameters saved in sen.pickle"
+    )
+    # calculate pruned params's ratio
+    params_sensitive = pruner._get_ratios_by_loss(params_sensitive, loss=0.02)
+    for key in params_sensitive.keys():
+        logger.info("{}, {}".format(key, params_sensitive[key]))
+
+    #params_sensitive = {}
+    #for param in model.parameters():
+    #    if 'transpose' not in param.name and 'linear' not in param.name:
+    #        params_sensitive[param.name] = 0.1  
+
+    plan = pruner.prune_vars(params_sensitive, [0])
+
+    flops = paddle.flops(model, [1, 3, 640, 640])
+    logger.info("FLOPs after pruning: {}".format(flops))
+
+    # start train
+
+    program.train(config, train_dataloader, valid_dataloader, device, model,
+                  loss_class, optimizer, lr_scheduler, post_process_class,
+                  eval_class, pre_best_model_dict, logger, vdl_writer)
 
 
 if __name__ == '__main__':
-    parser = program.ArgsParser()
-    FLAGS = parser.parse_args()
-    main()
+    config, device, logger, vdl_writer = program.preprocess(is_train=True)
+    main(config, device, logger, vdl_writer)

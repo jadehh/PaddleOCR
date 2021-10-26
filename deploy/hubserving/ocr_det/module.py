@@ -3,24 +3,22 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import ast
-import copy
-import math
 import os
-import time
+import sys
+sys.path.insert(0, ".")
 
-from paddle.fluid.core import AnalysisConfig, create_paddle_predictor, PaddleTensor
+import copy
+
 from paddlehub.common.logger import logger
 from paddlehub.module.module import moduleinfo, runnable, serving
-from PIL import Image
 import cv2
 import numpy as np
-import paddle.fluid as fluid
 import paddlehub as hub
 
 from tools.infer.utility import base64_to_cv2
 from tools.infer.predict_det import TextDetector
+from tools.infer.utility import parse_args
+from deploy.hubserving.ocr_system.params import read_params
 
 
 @moduleinfo(
@@ -35,8 +33,7 @@ class OCRDet(hub.Module):
         """
         initialize with the necessary elements
         """
-        from ocr_det.params import read_params
-        cfg = read_params()
+        cfg = self.merge_configs()
 
         cfg.use_gpu = use_gpu
         if use_gpu:
@@ -55,6 +52,20 @@ class OCRDet(hub.Module):
 
         self.text_detector = TextDetector(cfg)
 
+    def merge_configs(self, ):
+        # deafult cfg
+        backup_argv = copy.deepcopy(sys.argv)
+        sys.argv = sys.argv[:1]
+        cfg = parse_args()
+
+        update_cfg_map = vars(read_params())
+
+        for key in update_cfg_map:
+            cfg.__setattr__(key, update_cfg_map[key])
+
+        sys.argv = copy.deepcopy(backup_argv)
+        return cfg
+
     def read_images(self, paths=[]):
         images = []
         for img_path in paths:
@@ -67,9 +78,7 @@ class OCRDet(hub.Module):
             images.append(img)
         return images
 
-    def predict(self,
-                images=[],
-                paths=[]):
+    def predict(self, images=[], paths=[]):
         """
         Get the text box in the predicted images.
         Args:
@@ -87,7 +96,7 @@ class OCRDet(hub.Module):
             raise TypeError("The input data is inconsistent with expectations.")
 
         assert predicted_data != [], "There is not any image to be predicted. Please check the input data."
-        
+
         all_results = []
         for img in predicted_data:
             if img is None:
@@ -99,11 +108,9 @@ class OCRDet(hub.Module):
 
             rec_res_final = []
             for dno in range(len(dt_boxes)):
-                rec_res_final.append(
-                    {
-                        'text_region': dt_boxes[dno].astype(np.int).tolist()
-                    }
-                )
+                rec_res_final.append({
+                    'text_region': dt_boxes[dno].astype(np.int).tolist()
+                })
             all_results.append(rec_res_final)
         return all_results
 
@@ -116,7 +123,7 @@ class OCRDet(hub.Module):
         results = self.predict(images_decode, **kwargs)
         return results
 
-   
+
 if __name__ == '__main__':
     ocr = OCRDet()
     image_path = [

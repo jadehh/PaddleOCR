@@ -1,6 +1,22 @@
-## TEXT ANGLE CLASSIFICATION
+# TEXT ANGLE CLASSIFICATION
 
-### DATA PREPARATION
+- [Method Introduction](#method-introduction)
+- [Data Preparation](#data-preparation)
+- [Training](#training)
+- [Evaluation](#evaluation)
+- [Prediction](#prediction)
+
+<a name="method-introduction"></a>
+## Method Introduction
+The angle classification is used in the scene where the image is not 0 degrees. In this scene, it is necessary to perform a correction operation on the text line detected in the picture. In the PaddleOCR system,
+The text line image obtained after text detection is sent to the recognition model after affine transformation. At this time, only a 0 and 180 degree angle classification of the text is required, so the built-in PaddleOCR text angle classifier **only supports 0 and 180 degree classification**. If you want to support more angles, you can modify the algorithm yourself to support.
+
+Example of 0 and 180 degree data samples：
+
+![](../imgs_results/angle_class_example.jpg)
+
+<a name="data-preparation"></a>
+## Data Preparation
 
 Please organize the dataset as follows:
 
@@ -23,8 +39,8 @@ First put the training images in the same folder (train_images), and use a txt f
 ```
 " Image file name           Image annotation "
 
-train_data/word_001.jpg   0
-train_data/word_002.jpg   180
+train/word_001.jpg   0
+train/word_002.jpg   180
 ```
 
 The final training set should have the following file structure:
@@ -55,8 +71,9 @@ containing all images (test) and a cls_gt_test.txt. The structure of the test se
             |- word_003.jpg
             | ...
 ```
-
-### TRAINING
+<a name="training"></a>
+## Training
+Write the prepared txt file and image folder path into the configuration file under the `Train/Eval.dataset.label_file_list` and `Train/Eval.dataset.data_dir` fields, the absolute path of the image consists of the `Train/Eval.dataset.data_dir` field and the image name recorded in the txt file.
 
 PaddleOCR provides training scripts, evaluation scripts, and prediction scripts.
 
@@ -65,62 +82,71 @@ Start training:
 ```
 # Set PYTHONPATH path
 export PYTHONPATH=$PYTHONPATH:.
-# GPU training Support single card and multi-card training, specify the card number through CUDA_VISIBLE_DEVICES
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-# Training icdar15 English data
-python3 tools/train.py -c configs/cls/cls_mv3.yml
+# GPU training Support single card and multi-card training, specify the card number through --gpus.
+# Start training, the following command has been written into the train.sh file, just modify the configuration file path in the file
+python3 -m paddle.distributed.launch --gpus '0,1,2,3,4,5,6,7'  tools/train.py -c configs/cls/cls_mv3.yml
 ```
 
 - Data Augmentation
 
-PaddleOCR provides a variety of data augmentation methods. If you want to add disturbance during training, please set `distort: true` in the configuration file.
+PaddleOCR provides a variety of data augmentation methods. If you want to add disturbance during training, Please uncomment the `RecAug` and `RandAugment` fields under `Train.dataset.transforms` in the configuration file.
 
 The default perturbation methods are: cvtColor, blur, jitter, Gasuss noise, random crop, perspective, color reverse, RandAugment.
 
 Except for RandAugment, each disturbance method is selected with a 50% probability during the training process. For specific code implementation, please refer to:
-[randaugment.py](https://github.com/PaddlePaddle/PaddleOCR/blob/develop/ppocr/data/cls/randaugment.py)
-[img_tools.py](https://github.com/PaddlePaddle/PaddleOCR/blob/develop/ppocr/data/rec/img_tools.py)
+[rec_img_aug.py](../../ppocr/data/imaug/rec_img_aug.py)
+[randaugment.py](../../ppocr/data/imaug/randaugment.py)
 
 
 - Training
 
-PaddleOCR supports alternating training and evaluation. You can modify `eval_batch_step` in `configs/cls/cls_mv3.yml` to set the evaluation frequency. By default, it is evaluated every 500 iter and the best acc model is saved under `output/cls_mv3/best_accuracy` during the evaluation process.
+PaddleOCR supports alternating training and evaluation. You can modify `eval_batch_step` in `configs/cls/cls_mv3.yml` to set the evaluation frequency. By default, it is evaluated every 1000 iter. The following content will be saved during training:
+```bash
+├── best_accuracy.pdopt # Optimizer parameters for the best model
+├── best_accuracy.pdparams # Parameters of the best model
+├── best_accuracy.states # Metric info and epochs of the best model
+├── config.yml # Configuration file for this experiment
+├── latest.pdopt # Optimizer parameters for the latest model
+├── latest.pdparams # Parameters of the latest model
+├── latest.states # Metric info and epochs of the latest model
+└── train.log # Training log
+```
 
 If the evaluation set is large, the test will be time-consuming. It is recommended to reduce the number of evaluations, or evaluate after training.
 
 **Note that the configuration file for prediction/evaluation must be consistent with the training.**
 
-### EVALUATION
+<a name="evaluation"></a>
+## Evaluation
 
-The evaluation data set can be modified via `configs/cls/cls_reader.yml` setting of `label_file_path` in EvalReader.
+The evaluation dataset can be set by modifying the `Eval.dataset.label_file_list` field in the `configs/cls/cls_mv3.yml` file.
 
 ```
 export CUDA_VISIBLE_DEVICES=0
 # GPU evaluation, Global.checkpoints is the weight to be tested
 python3 tools/eval.py -c configs/cls/cls_mv3.yml -o Global.checkpoints={path/to/weights}/best_accuracy
 ```
-
-### PREDICTION
+<a name="prediction"></a>
+## Prediction
 
 * Training engine prediction
 
 Using the model trained by paddleocr, you can quickly get prediction through the following script.
 
-The default prediction picture is stored in `infer_img`, and the weight is specified via `-o Global.checkpoints`:
+Use `Global.infer_img` to specify the path of the predicted picture or folder, and use `Global.checkpoints` to specify the weight:
 
 ```
 # Predict English results
-python3 tools/infer_rec.py -c configs/cls/cls_mv3.yml -o Global.checkpoints={path/to/weights}/best_accuracy TestReader.infer_img=doc/imgs_words/en/word_1.jpg
+python3 tools/infer_cls.py -c configs/cls/cls_mv3.yml -o Global.pretrained_model={path/to/weights}/best_accuracy Global.load_static_weights=false Global.infer_img=doc/imgs_words_en/word_10.png
 ```
 
 Input image:
 
-![](../imgs_words/en/word_1.png)
+![](../imgs_words_en/word_10.png)
 
 Get the prediction result of the input image:
 
 ```
-infer_img: doc/imgs_words/en/word_1.png
-    scores: [[0.93161047 0.06838956]]
-    label: [0]
+infer_img: doc/imgs_words_en/word_10.png
+     result: ('0', 0.9999995)
 ```
