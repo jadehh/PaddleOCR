@@ -9,19 +9,26 @@ pip install imgaug
 pip install pyclipper
 ```
 
-## 训练车牌检测模型
+## 训练检测模型
 
-### 从头训练
+### 从头训练车牌关键点检测模型
 
 ```bash
 python tools/train.py -c configs/det/car_plate/det_mv3_db.yml
 ```
 
-### 恢复训练
+### 恢复训练车牌关键点检测模型
 
 ```bash
 python tools/train.py -c configs/det/car_plate/det_mv3_db.yml -o Global.checkpoints=./your/trained/model
 ```
+
+### 从头训练箱号关键点检测点模型
+
+```bash
+python tools/train.py -c configs/det_mv3_container_db_v1.1.yml
+```
+
 
 ## 测试文件夹下所有图片
 
