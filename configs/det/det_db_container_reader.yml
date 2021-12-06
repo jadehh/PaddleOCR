@@ -2,13 +2,13 @@ TrainReader:
   reader_function: ppocr.data.det.dataset_traversal,TrainReader
   process_function: ppocr.data.det.db_process,DBProcessTrain
   num_workers: 8
-  img_set_dir: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集
+  img_set_dir: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集/
   label_file_path: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集/train_icdar2015_label.txt
 
 EvalReader:
   reader_function: ppocr.data.det.dataset_traversal,EvalTestReader
   process_function: ppocr.data.det.db_process,DBProcessTest
-  img_set_dir: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集
+  img_set_dir: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集/
   label_file_path: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集/test_icdar2015_label.txt
   test_image_shape: [736, 1280]
   
@@ -16,7 +16,7 @@ TestReader:
   reader_function: ppocr.data.det.dataset_traversal,EvalTestReader
   process_function: ppocr.data.det.db_process,DBProcessTest
   infer_img:
-  img_set_dir: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集
+  img_set_dir: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集/
   label_file_path: /home/samples/sda2/Data/关键点检测数据集/箱号关键点数据集/test_icdar2015_label.txt
   test_image_shape: [736, 1280]
   do_eval: True

@@ -805,7 +805,7 @@ class DBTextDetector(object):
 if __name__ == '__main__':
     import  cv2
     from jade import draw_ocr,GetAllImagesPath
-    dbTextDetector=DBTextDetector("../models/2021-08-31/best_model")
+    dbTextDetector=DBTextDetector(r"G:\SVN\软件\箱号识别服务\箱门检测+箱号识别服务V2.4.2\Windows\models\TextDetModels\2021-01-24")
     image_path_list = GetAllImagesPath(r"F:\数据集\字符检测数据集\苏州电子围网车牌关键点数据集\2021-08-31\image")
     for image_path in image_path_list:
         image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8),

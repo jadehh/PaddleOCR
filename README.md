@@ -26,7 +26,7 @@ python tools/train.py -c configs/det/car_plate/det_mv3_db.yml -o Global.checkpoi
 ### 从头训练箱号关键点检测点模型
 
 ```bash
-python tools/train.py -c configs/det_mv3_container_db_v1.1.yml
+python tools/train.py -c configs/det/det_mv3_container_db_v1.1.yml
 ```
 
 
