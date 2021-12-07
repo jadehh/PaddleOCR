@@ -283,7 +283,7 @@ def main(args):
     for image_file in image_file_list:
         img, flag = check_and_read_gif(image_file)
         if not flag:
-            img = cv2.imread(image_file)
+            img = cv2.imdecode(np.fromfile(image_file, dtype=np.uint8), -1)
         if img is None:
             logger.info("error in loading image:{}".format(image_file))
             continue
