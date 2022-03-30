@@ -61,3 +61,10 @@ python tools/infer/predict_rec.py --image_dir="E:\Data\OCR\箱号识别数据集
 ```
 
 
+
+## 文本检测、方向分类和文字识别串联推理
+以超轻量中文OCR模型推理为例，在执行预测时，需要通过参数image_dir指定单张图像或者图像集合的路径、参数det_model_dir,cls_model_dir和rec_model_dir分别指定检测，方向分类和识别的inference模型路径。参数use_angle_cls用于控制是否启用方向分类模型。use_mp表示是否使用多进程。total_process_num表示在使用多进程时的进程数。可视化识别结果默认保存到 ./inference_results 文件夹里面。
+
+```bash
+python tools/infer/predict_system.py --image_dir="C:\Users\Administrator\Desktop\test_images/" --det_model_dir="E:\Models\Paddle2.3\ch_PP-OCRv2_det_infer/"  --rec_model_dir="E:\Models\Paddle2.3\ch_PP-OCRv2_rec_infer/" --use_angle_cls=false
+```
