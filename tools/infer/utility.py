@@ -15,9 +15,10 @@
 import argparse
 import os
 import sys
+import platform
 import cv2
 import numpy as np
-import json
+import paddle
 from PIL import Image, ImageDraw, ImageFont
 import math
 from paddle import inference
@@ -33,14 +34,16 @@ def init_args():
     parser = argparse.ArgumentParser()
     # params for prediction engine
     parser.add_argument("--use_gpu", type=str2bool, default=True)
+    parser.add_argument("--use_xpu", type=str2bool, default=False)
     parser.add_argument("--ir_optim", type=str2bool, default=True)
     parser.add_argument("--use_tensorrt", type=str2bool, default=False)
-    parser.add_argument("--min_subgraph_size", type=int, default=10)
+    parser.add_argument("--min_subgraph_size", type=int, default=15)
     parser.add_argument("--precision", type=str, default="fp32")
     parser.add_argument("--gpu_mem", type=int, default=500)
 
     # params for text detector
     parser.add_argument("--image_dir", type=str)
+    parser.add_argument("--dataset_dir", type=str)
     parser.add_argument("--det_algorithm", type=str, default='DB')
     parser.add_argument("--det_model_dir", type=str)
     parser.add_argument("--det_limit_side_len", type=float, default=960)
@@ -51,7 +54,7 @@ def init_args():
     parser.add_argument("--det_db_box_thresh", type=float, default=0.6)
     parser.add_argument("--det_db_unclip_ratio", type=float, default=1.5)
     parser.add_argument("--max_batch_size", type=int, default=10)
-    parser.add_argument("--use_dilation", type=bool, default=False)
+    parser.add_argument("--use_dilation", type=str2bool, default=False)
     parser.add_argument("--det_db_score_mode", type=str, default="fast")
     # EAST parmas
     parser.add_argument("--det_east_score_thresh", type=float, default=0.8)
@@ -61,13 +64,26 @@ def init_args():
     # SAST parmas
     parser.add_argument("--det_sast_score_thresh", type=float, default=0.5)
     parser.add_argument("--det_sast_nms_thresh", type=float, default=0.2)
-    parser.add_argument("--det_sast_polygon", type=bool, default=False)
+    parser.add_argument("--det_sast_polygon", type=str2bool, default=False)
+
+    # PSE parmas
+    parser.add_argument("--det_pse_thresh", type=float, default=0)
+    parser.add_argument("--det_pse_box_thresh", type=float, default=0.85)
+    parser.add_argument("--det_pse_min_area", type=float, default=16)
+    parser.add_argument("--det_pse_box_type", type=str, default='quad')
+    parser.add_argument("--det_pse_scale", type=int, default=1)
+
+    # FCE parmas
+    parser.add_argument("--scales", type=list, default=[8, 16, 32])
+    parser.add_argument("--alpha", type=float, default=1.0)
+    parser.add_argument("--beta", type=float, default=1.0)
+    parser.add_argument("--fourier_degree", type=int, default=5)
+    parser.add_argument("--det_fce_box_type", type=str, default='poly')
 
     # params for text recognizer
-    parser.add_argument("--rec_algorithm", type=str, default='CRNN')
+    parser.add_argument("--rec_algorithm", type=str, default='SVTR_LCNet')
     parser.add_argument("--rec_model_dir", type=str)
-    parser.add_argument("--rec_image_shape", type=str, default="3, 32, 320")
-    parser.add_argument("--rec_char_type", type=str, default='ch')
+    parser.add_argument("--rec_image_shape", type=str, default="3, 48, 320")
     parser.add_argument("--rec_batch_num", type=int, default=6)
     parser.add_argument("--max_text_length", type=int, default=25)
     parser.add_argument(
@@ -90,7 +106,6 @@ def init_args():
     parser.add_argument(
         "--e2e_char_dict_path", type=str, default="./ppocr/utils/ic15_dict.txt")
     parser.add_argument("--e2e_pgnet_valid_set", type=str, default='totaltext')
-    parser.add_argument("--e2e_pgnet_polygon", type=bool, default=True)
     parser.add_argument("--e2e_pgnet_mode", type=str, default='fast')
 
     # params for text classifier
@@ -104,17 +119,29 @@ def init_args():
     parser.add_argument("--enable_mkldnn", type=str2bool, default=False)
     parser.add_argument("--cpu_threads", type=int, default=10)
     parser.add_argument("--use_pdserving", type=str2bool, default=False)
-    parser.add_argument("--warmup", type=str2bool, default=True)
+    parser.add_argument("--warmup", type=str2bool, default=False)
+
+    # SR parmas
+    parser.add_argument("--sr_model_dir", type=str)
+    parser.add_argument("--sr_image_shape", type=str, default="3, 32, 128")
+    parser.add_argument("--sr_batch_num", type=int, default=1)
+
+    #
+    parser.add_argument(
+        "--draw_img_save_dir", type=str, default="./inference_results")
+    parser.add_argument("--save_crop_res", type=str2bool, default=False)
+    parser.add_argument("--crop_res_save_dir", type=str, default="./output")
 
     # multi-process
     parser.add_argument("--use_mp", type=str2bool, default=False)
     parser.add_argument("--total_process_num", type=int, default=1)
     parser.add_argument("--process_id", type=int, default=0)
 
-    parser.add_argument("--benchmark", type=bool, default=False)
+    parser.add_argument("--benchmark", type=str2bool, default=False)
     parser.add_argument("--save_log_path", type=str, default="./log_output/")
 
     parser.add_argument("--show_log", type=str2bool, default=True)
+    parser.add_argument("--use_onnx", type=str2bool, default=False)
     return parser
 
 
@@ -132,131 +159,163 @@ def create_predictor(args, mode, logger):
         model_dir = args.rec_model_dir
     elif mode == 'table':
         model_dir = args.table_model_dir
+    elif mode == 'ser':
+        model_dir = args.ser_model_dir
+    elif mode == "sr":
+        model_dir = args.sr_model_dir
+    elif mode == 'layout':
+        model_dir = args.layout_model_dir
     else:
         model_dir = args.e2e_model_dir
 
     if model_dir is None:
         logger.info("not find {} model file path {}".format(mode, model_dir))
         sys.exit(0)
-    model_file_path = model_dir + "/inference.pdmodel"
-    params_file_path = model_dir + "/inference.pdiparams"
-    if not os.path.exists(model_file_path):
-        raise ValueError("not find model file path {}".format(model_file_path))
-    if not os.path.exists(params_file_path):
-        raise ValueError("not find params file path {}".format(
-            params_file_path))
+    if args.use_onnx:
+        import onnxruntime as ort
+        model_file_path = model_dir
+        if not os.path.exists(model_file_path):
+            raise ValueError("not find model file path {}".format(
+                model_file_path))
+        sess = ort.InferenceSession(model_file_path)
+        return sess, sess.get_inputs()[0], None, None
 
-    config = inference.Config(model_file_path, params_file_path)
+    else:
+        file_names = ['model', 'inference']
+        for file_name in file_names:
+            model_file_path = '{}/{}.pdmodel'.format(model_dir, file_name)
+            params_file_path = '{}/{}.pdiparams'.format(model_dir, file_name)
+            if os.path.exists(model_file_path) and os.path.exists(
+                    params_file_path):
+                break
+        if not os.path.exists(model_file_path):
+            raise ValueError(
+                "not find model.pdmodel or inference.pdmodel in {}".format(
+                    model_dir))
+        if not os.path.exists(params_file_path):
+            raise ValueError(
+                "not find model.pdiparams or inference.pdiparams in {}".format(
+                    model_dir))
 
-    if hasattr(args, 'precision'):
-        if args.precision == "fp16" and args.use_tensorrt:
-            precision = inference.PrecisionType.Half
-        elif args.precision == "int8":
-            precision = inference.PrecisionType.Int8
+        config = inference.Config(model_file_path, params_file_path)
+
+        if hasattr(args, 'precision'):
+            if args.precision == "fp16" and args.use_tensorrt:
+                precision = inference.PrecisionType.Half
+            elif args.precision == "int8":
+                precision = inference.PrecisionType.Int8
+            else:
+                precision = inference.PrecisionType.Float32
         else:
             precision = inference.PrecisionType.Float32
-    else:
-        precision = inference.PrecisionType.Float32
 
-    if args.use_gpu:
-        config.enable_use_gpu(args.gpu_mem, 0)
-        if args.use_tensorrt:
-            config.enable_tensorrt_engine(
-                precision_mode=precision,
-                max_batch_size=args.max_batch_size,
-                min_subgraph_size=args.min_subgraph_size)
-            # skip the minmum trt subgraph
-        if mode == "det":
-            min_input_shape = {
-                "x": [1, 3, 50, 50],
-                "conv2d_92.tmp_0": [1, 96, 20, 20],
-                "conv2d_91.tmp_0": [1, 96, 10, 10],
-                "conv2d_59.tmp_0": [1, 96, 20, 20],
-                "nearest_interp_v2_1.tmp_0": [1, 96, 10, 10],
-                "nearest_interp_v2_2.tmp_0": [1, 96, 20, 20],
-                "conv2d_124.tmp_0": [1, 96, 20, 20],
-                "nearest_interp_v2_3.tmp_0": [1, 24, 20, 20],
-                "nearest_interp_v2_4.tmp_0": [1, 24, 20, 20],
-                "nearest_interp_v2_5.tmp_0": [1, 24, 20, 20],
-                "elementwise_add_7": [1, 56, 2, 2],
-                "nearest_interp_v2_0.tmp_0": [1, 96, 2, 2]
-            }
-            max_input_shape = {
-                "x": [1, 3, 2000, 2000],
-                "conv2d_92.tmp_0": [1, 96, 400, 400],
-                "conv2d_91.tmp_0": [1, 96, 200, 200],
-                "conv2d_59.tmp_0": [1, 96, 400, 400],
-                "nearest_interp_v2_1.tmp_0": [1, 96, 200, 200],
-                "conv2d_124.tmp_0": [1, 256, 400, 400],
-                "nearest_interp_v2_2.tmp_0": [1, 96, 400, 400],
-                "nearest_interp_v2_3.tmp_0": [1, 24, 400, 400],
-                "nearest_interp_v2_4.tmp_0": [1, 24, 400, 400],
-                "nearest_interp_v2_5.tmp_0": [1, 24, 400, 400],
-                "elementwise_add_7": [1, 56, 400, 400],
-                "nearest_interp_v2_0.tmp_0": [1, 96, 400, 400]
-            }
-            opt_input_shape = {
-                "x": [1, 3, 640, 640],
-                "conv2d_92.tmp_0": [1, 96, 160, 160],
-                "conv2d_91.tmp_0": [1, 96, 80, 80],
-                "conv2d_59.tmp_0": [1, 96, 160, 160],
-                "nearest_interp_v2_1.tmp_0": [1, 96, 80, 80],
-                "nearest_interp_v2_2.tmp_0": [1, 96, 160, 160],
-                "conv2d_124.tmp_0": [1, 256, 160, 160],
-                "nearest_interp_v2_3.tmp_0": [1, 24, 160, 160],
-                "nearest_interp_v2_4.tmp_0": [1, 24, 160, 160],
-                "nearest_interp_v2_5.tmp_0": [1, 24, 160, 160],
-                "elementwise_add_7": [1, 56, 40, 40],
-                "nearest_interp_v2_0.tmp_0": [1, 96, 40, 40]
-            }
-        elif mode == "rec":
-            min_input_shape = {"x": [args.rec_batch_num, 3, 32, 10]}
-            max_input_shape = {"x": [args.rec_batch_num, 3, 32, 2000]}
-            opt_input_shape = {"x": [args.rec_batch_num, 3, 32, 320]}
-        elif mode == "cls":
-            min_input_shape = {"x": [args.rec_batch_num, 3, 48, 10]}
-            max_input_shape = {"x": [args.rec_batch_num, 3, 48, 2000]}
-            opt_input_shape = {"x": [args.rec_batch_num, 3, 48, 320]}
+        if args.use_gpu:
+            gpu_id = get_infer_gpuid()
+            if gpu_id is None:
+                logger.warning(
+                    "GPU is not found in current device by nvidia-smi. Please check your device or ignore it if run on jetson."
+                )
+            config.enable_use_gpu(args.gpu_mem, 0)
+            if args.use_tensorrt:
+                config.enable_tensorrt_engine(
+                    workspace_size=1 << 30,
+                    precision_mode=precision,
+                    max_batch_size=args.max_batch_size,
+                    min_subgraph_size=args.
+                    min_subgraph_size,  # skip the minmum trt subgraph
+                    use_calib_mode=False)
+
+                # collect shape
+                trt_shape_f = os.path.join(model_dir,
+                                           f"{mode}_trt_dynamic_shape.txt")
+
+                if not os.path.exists(trt_shape_f):
+                    config.collect_shape_range_info(trt_shape_f)
+                    logger.info(
+                        f"collect dynamic shape info into : {trt_shape_f}")
+                else:
+                    logger.info(
+                        f"dynamic shape info file( {trt_shape_f} ) already exists, not need to generate again."
+                    )
+                try:
+                    config.enable_tuned_tensorrt_dynamic_shape(trt_shape_f,
+                                                               True)
+                except Exception as E:
+                    logger.info(E)
+                    logger.info("Please keep your paddlepaddle-gpu >= 2.3.0!")
+
+        elif args.use_xpu:
+            config.enable_xpu(10 * 1024 * 1024)
         else:
-            min_input_shape = {"x": [1, 3, 10, 10]}
-            max_input_shape = {"x": [1, 3, 1000, 1000]}
-            opt_input_shape = {"x": [1, 3, 500, 500]}
-        config.set_trt_dynamic_shape_info(min_input_shape, max_input_shape,
-                                          opt_input_shape)
+            config.disable_gpu()
+            if args.enable_mkldnn:
+                # cache 10 different shapes for mkldnn to avoid memory leak
+                config.set_mkldnn_cache_capacity(10)
+                config.enable_mkldnn()
+                if args.precision == "fp16":
+                    config.enable_mkldnn_bfloat16()
+                if hasattr(args, "cpu_threads"):
+                    config.set_cpu_math_library_num_threads(args.cpu_threads)
+                else:
+                    # default cpu threads as 10
+                    config.set_cpu_math_library_num_threads(10)
+        # enable memory optim
+        config.enable_memory_optim()
+        config.disable_glog_info()
+        config.delete_pass("conv_transpose_eltwiseadd_bn_fuse_pass")
+        config.delete_pass("matmul_transpose_reshape_fuse_pass")
+        if mode == 'table':
+            config.delete_pass("fc_fuse_pass")  # not supported for table
+        config.switch_use_feed_fetch_ops(False)
+        config.switch_ir_optim(True)
 
-    else:
-        config.disable_gpu()
-        if hasattr(args, "cpu_threads"):
-            config.set_cpu_math_library_num_threads(args.cpu_threads)
+        # create predictor
+        predictor = inference.create_predictor(config)
+        input_names = predictor.get_input_names()
+        if mode in ['ser', 're']:
+            input_tensor = []
+            for name in input_names:
+                input_tensor.append(predictor.get_input_handle(name))
         else:
-            # default cpu threads as 10
-            config.set_cpu_math_library_num_threads(10)
-        if args.enable_mkldnn:
-            # cache 10 different shapes for mkldnn to avoid memory leak
-            config.set_mkldnn_cache_capacity(10)
-            config.enable_mkldnn()
+            for name in input_names:
+                input_tensor = predictor.get_input_handle(name)
+        output_tensors = get_output_tensors(args, mode, predictor)
+        return predictor, input_tensor, output_tensors, config
 
-    # enable memory optim
-    config.enable_memory_optim()
-    #config.disable_glog_info()
 
-    config.delete_pass("conv_transpose_eltwiseadd_bn_fuse_pass")
-    if mode == 'table':
-        config.delete_pass("fc_fuse_pass")  # not supported for table
-    config.switch_use_feed_fetch_ops(False)
-    config.switch_ir_optim(True)
-
-    # create predictor
-    predictor = inference.create_predictor(config)
-    input_names = predictor.get_input_names()
-    for name in input_names:
-        input_tensor = predictor.get_input_handle(name)
+def get_output_tensors(args, mode, predictor):
     output_names = predictor.get_output_names()
     output_tensors = []
-    for output_name in output_names:
-        output_tensor = predictor.get_output_handle(output_name)
-        output_tensors.append(output_tensor)
-    return predictor, input_tensor, output_tensors, config
+    if mode == "rec" and args.rec_algorithm in ["CRNN", "SVTR_LCNet"]:
+        output_name = 'softmax_0.tmp_0'
+        if output_name in output_names:
+            return [predictor.get_output_handle(output_name)]
+        else:
+            for output_name in output_names:
+                output_tensor = predictor.get_output_handle(output_name)
+                output_tensors.append(output_tensor)
+    else:
+        for output_name in output_names:
+            output_tensor = predictor.get_output_handle(output_name)
+            output_tensors.append(output_tensor)
+    return output_tensors
+
+
+def get_infer_gpuid():
+    sysstr = platform.system()
+    if sysstr == "Windows":
+        return 0
+
+    if not paddle.fluid.core.is_compiled_with_rocm():
+        cmd = "env | grep CUDA_VISIBLE_DEVICES"
+    else:
+        cmd = "env | grep HIP_VISIBLE_DEVICES"
+    env_cuda = os.popen(cmd).readlines()
+    if len(env_cuda) == 0:
+        return 0
+    else:
+        gpu_id = env_cuda[0].strip().split("=")[1]
+        return int(gpu_id[0])
 
 
 def draw_e2e_res(dt_boxes, strs, img_path):
@@ -491,7 +550,7 @@ def text_visual(texts,
 def base64_to_cv2(b64str):
     import base64
     data = base64.b64decode(b64str.encode('utf8'))
-    data = np.fromstring(data, np.uint8)
+    data = np.frombuffer(data, np.uint8)
     data = cv2.imdecode(data, cv2.IMREAD_COLOR)
     return data
 
@@ -540,6 +599,12 @@ def get_rotate_crop_image(img, points):
     if dst_img_height * 1.0 / dst_img_width >= 1.5:
         dst_img = np.rot90(dst_img)
     return dst_img
+
+
+def check_gpu(use_gpu):
+    if use_gpu and not paddle.is_compiled_with_cuda():
+        use_gpu = False
+    return use_gpu
 
 
 if __name__ == '__main__':

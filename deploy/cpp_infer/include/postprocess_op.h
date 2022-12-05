@@ -34,7 +34,7 @@ using namespace std;
 
 namespace PaddleOCR {
 
-class PostProcessor {
+class DBPostProcessor {
 public:
   void GetContourArea(const std::vector<std::vector<float>> &box,
                       float unclip_ratio, float &distance);
@@ -56,7 +56,7 @@ public:
   std::vector<std::vector<std::vector<int>>>
   BoxesFromBitmap(const cv::Mat pred, const cv::Mat bitmap,
                   const float &box_thresh, const float &det_db_unclip_ratio,
-                  const bool &use_polygon_score);
+                  const std::string &det_db_score_mode);
 
   std::vector<std::vector<std::vector<int>>>
   FilterTagDetRes(std::vector<std::vector<std::vector<int>>> boxes,
@@ -88,6 +88,22 @@ private:
       return min;
     return x;
   }
+};
+
+class TablePostProcessor {
+public:
+  void init(std::string label_path, bool merge_no_span_structure = true);
+  void Run(std::vector<float> &loc_preds, std::vector<float> &structure_probs,
+           std::vector<float> &rec_scores, std::vector<int> &loc_preds_shape,
+           std::vector<int> &structure_probs_shape,
+           std::vector<std::vector<std::string>> &rec_html_tag_batch,
+           std::vector<std::vector<std::vector<int>>> &rec_boxes_batch,
+           std::vector<int> &width_list, std::vector<int> &height_list);
+
+private:
+  std::vector<std::string> label_list_;
+  std::string end = "eos";
+  std::string beg = "sos";
 };
 
 } // namespace PaddleOCR

@@ -1,103 +1,216 @@
+# PaddleOCR Quick Start
 
-# Quick start of Chinese OCR model
+**Note:** This tutorial mainly introduces the usage of PP-OCR series models, please refer to [PP-Structure Quick Start](../../ppstructure/docs/quickstart_en.md) for the quick use of document analysis related functions.
 
-## 1. Prepare for the environment
-
-Please refer to [quick installation](./installation_en.md) to configure the PaddleOCR operating environment.
-
-* Note: Support the use of PaddleOCR through whl package installation，pelease refer  [PaddleOCR Package](./whl_en.md).
-
-## 2.inference models
-
-The detection and recognition models on the mobile and server sides are as follows. For more models  (including multiple languages), please refer to [PP-OCR v2.0 series model list](../doc_ch/models_list.md)
-
-| Model introduction     | Model name      | Recommended scene          | Detection model | Direction Classifier | Recognition model |
-| ------------ | --------------- | ----------------|---- | ---------- | -------- |
-| Ultra-lightweight Chinese OCR model (8.1M) | ch_ppocr_mobile_v2.0_xx |Mobile-side/Server-side|[inference model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_det_infer.tar) / [pretrained model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_det_train.tar)|[inference model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar) / [pretrained model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_train.tar) |[inference model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_rec_infer.tar) / [pretrained model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_rec_pre.tar)      |
-| Universal Chinese OCR model (143M)   | ch_ppocr_server_v2.0_xx |Server-side |[inference model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_server_v2.0_det_infer.tar) / [pretrained model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_server_v2.0_det_train.tar)          |[inference model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar) / [pretrained model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_train.tar)    |[inference model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_server_v2.0_rec_infer.tar) / [pretrained model](https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_server_v2.0_rec_pre.tar)  |
+- [1. Installation](#1-installation)
+  - [1.1 Install PaddlePaddle](#11-install-paddlepaddle)
+  - [1.2 Install PaddleOCR Whl Package](#12-install-paddleocr-whl-package)
+- [2. Easy-to-Use](#2-easy-to-use)
+  - [2.1 Use by Command Line](#21-use-by-command-line)
+    - [2.1.1 Chinese and English Model](#211-chinese-and-english-model)
+    - [2.1.2 Multi-language Model](#212-multi-language-model)
+  - [2.2 Use by Code](#22-use-by-code)
+    - [2.2.1 Chinese & English Model and Multilingual Model](#221-chinese--english-model-and-multilingual-model)
+- [3. Summary](#3-summary)
 
 
-* If `wget` is not installed in the windows environment, you can copy the link to the browser to download when downloading the model, then uncompress it and place it in the corresponding directory.
 
-Copy the download address of the `inference model` for detection and recognition in the table above, and uncompress them.
+<a name="1nstallation"></a>
 
-```
-mkdir inference && cd inference
-# Download the detection model and unzip
-wget {url/of/detection/inference_model} && tar xf {name/of/detection/inference_model/package}
-# Download the recognition model and unzip
-wget {url/of/recognition/inference_model} && tar xf {name/of/recognition/inference_model/package}
-# Download the direction classifier model and unzip
-wget {url/of/classification/inference_model} && tar xf {name/of/classification/inference_model/package}
-cd ..
-```
+## 1. Installation
 
-Take the ultra-lightweight model as an example:
+<a name="11-install-paddlepaddle"></a>
 
-```
-mkdir inference && cd inference
-# Download the detection model of the ultra-lightweight Chinese OCR model and uncompress it
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_det_infer.tar && tar xf ch_ppocr_mobile_v2.0_det_infer.tar
-# Download the recognition model of the ultra-lightweight Chinese OCR model and uncompress it
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_rec_infer.tar && tar xf ch_ppocr_mobile_v2.0_rec_infer.tar
-# Download the angle classifier model of the ultra-lightweight Chinese OCR model and uncompress it
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar && tar xf ch_ppocr_mobile_v2.0_cls_infer.tar
-cd ..
-```
+### 1.1 Install PaddlePaddle
 
-After decompression, the file structure should be as follows:
+> If you do not have a Python environment, please refer to [Environment Preparation](./environment_en.md).
 
-```
-├── ch_ppocr_mobile_v2.0_cls_infer
-│   ├── inference.pdiparams
-│   ├── inference.pdiparams.info
-│   └── inference.pdmodel
-├── ch_ppocr_mobile_v2.0_det_infer
-│   ├── inference.pdiparams
-│   ├── inference.pdiparams.info
-│   └── inference.pdmodel
-├── ch_ppocr_mobile_v2.0_rec_infer
-    ├── inference.pdiparams
-    ├── inference.pdiparams.info
-    └── inference.pdmodel
-```
+- If you have CUDA 9 or CUDA 10 installed on your machine, please run the following command to install
 
-## 3. Single image or image set prediction
+  ```bash
+  python3 -m pip install paddlepaddle-gpu -i https://mirror.baidu.com/pypi/simple
+  ```
 
-* The following code implements text detection、angle class and recognition process. When performing prediction, you need to specify the path of a single image or image set through the parameter `image_dir`, the parameter `det_model_dir` specifies the path to detect the inference model, the parameter `rec_model_dir` specifies the path to identify the inference model, the parameter `use_angle_cls` specifies whether to use the direction classifier, the parameter `cls_model_dir` specifies the path to identify the direction classifier model, the parameter `use_space_char` specifies whether to predict the space char. The visual results are saved to the `./inference_results` folder by default.
+- If you have no available GPU on your machine, please run the following command to install the CPU version
 
+  ```bash
+  python3 -m pip install paddlepaddle -i https://mirror.baidu.com/pypi/simple
+  ```
 
+For more software version requirements, please refer to the instructions in [Installation Document](https://www.paddlepaddle.org.cn/install/quick) for operation.
+
+<a name="12-install-paddleocr-whl-package"></a>
+
+### 1.2 Install PaddleOCR Whl Package
 
 ```bash
-
-# Predict a single image specified by image_dir
-python3 tools/infer/predict_system.py --image_dir="./doc/imgs/11.jpg" --det_model_dir="./inference/ch_ppocr_mobile_v2.0_det_infer/"  --rec_model_dir="./inference/ch_ppocr_mobile_v2.0_rec_infer/" --cls_model_dir="./inference/ch_ppocr_mobile_v2.0_cls_infer/" --use_angle_cls=True --use_space_char=True
-
-# Predict imageset specified by image_dir
-python3 tools/infer/predict_system.py --image_dir="./doc/imgs/" --det_model_dir="./inference/ch_ppocr_mobile_v2.0_det_infer/"  --rec_model_dir="./inference/ch_ppocr_mobile_v2.0_rec_infer/" --cls_model_dir="./inference/ch_ppocr_mobile_v2.0_cls_infer/" --use_angle_cls=True --use_space_char=True
-
-# If you want to use the CPU for prediction, you need to set the use_gpu parameter to False
-python3 tools/infer/predict_system.py --image_dir="./doc/imgs/11.jpg" --det_model_dir="./inference/ch_ppocr_mobile_v2.0_det_infer/"  --rec_model_dir="./inference/ch_ppocr_mobile_v2.0_rec_infer/" --cls_model_dir="./inference/ch_ppocr_mobile_v2.0_cls_infer/" --use_angle_cls=True --use_space_char=True --use_gpu=False
+pip install "paddleocr>=2.0.1" # Recommend to use version 2.0.1+
 ```
 
-- Universal Chinese OCR model
+- **For windows users:** If you getting this error `OSError: [WinError 126] The specified module could not be found` when you install shapely on windows. Please try to download Shapely whl file [here](http://www.lfd.uci.edu/~gohlke/pythonlibs/#shapely).
 
-Please follow the above steps to download the corresponding models and update the relevant parameters, The example is as follows.
+  Reference: [Solve shapely installation on windows](https://stackoverflow.com/questions/44398265/install-shapely-oserror-winerror-126-the-specified-module-could-not-be-found)
 
+<a name="2-easy-to-use"></a>
+
+## 2. Easy-to-Use
+
+<a name="21-use-by-command-line"></a>
+
+### 2.1 Use by Command Line
+
+PaddleOCR provides a series of test images, click [here](https://paddleocr.bj.bcebos.com/dygraph_v2.1/ppocr_img.zip) to download, and then switch to the corresponding directory in the terminal
+
+```bash
+cd /path/to/ppocr_img
 ```
-# Predict a single image specified by image_dir
-python3 tools/infer/predict_system.py --image_dir="./doc/imgs/11.jpg" --det_model_dir="./inference/ch_ppocr_server_v2.0_det_infer/"  --rec_model_dir="./inference/ch_ppocr_server_v2.0_rec_infer/" --cls_model_dir="./inference/ch_ppocr_mobile_v2.0_cls_infer/" --use_angle_cls=True --use_space_char=True
+
+If you do not use the provided test image, you can replace the following `--image_dir` parameter with the corresponding test image path
+
+<a name="211-english-and-chinese-model"></a>
+
+#### 2.1.1 Chinese and English Model
+
+* Detection, direction classification and recognition: set the parameter`--use_gpu false` to disable the gpu device
+
+  ```bash
+  paddleocr --image_dir ./imgs_en/img_12.jpg --use_angle_cls true --lang en --use_gpu false
+  ```
+
+  Output will be a list, each item contains bounding box, text and recognition confidence
+
+  ```bash
+  [[[441.0, 174.0], [1166.0, 176.0], [1165.0, 222.0], [441.0, 221.0]], ('ACKNOWLEDGEMENTS', 0.9971134662628174)]
+  [[[403.0, 346.0], [1204.0, 348.0], [1204.0, 384.0], [402.0, 383.0]], ('We would like to thank all the designers and', 0.9761400818824768)]
+  [[[403.0, 396.0], [1204.0, 398.0], [1204.0, 434.0], [402.0, 433.0]], ('contributors who have been involved in the', 0.9791957139968872)]
+  ......
+  ```
+
+* Only detection: set `--rec` to `false`
+
+  ```bash
+  paddleocr --image_dir ./imgs_en/img_12.jpg --rec false
+  ```
+
+  Output will be a list, each item only contains bounding box
+
+  ```bash
+  [[397.0, 802.0], [1092.0, 802.0], [1092.0, 841.0], [397.0, 841.0]]
+  [[397.0, 750.0], [1211.0, 750.0], [1211.0, 789.0], [397.0, 789.0]]
+  [[397.0, 702.0], [1209.0, 698.0], [1209.0, 734.0], [397.0, 738.0]]
+  ......
+  ```
+
+* Only recognition: set `--det` to `false`
+
+  ```bash
+  paddleocr --image_dir ./imgs_words_en/word_10.png --det false --lang en
+  ```
+
+  Output will be a list, each item contains text and recognition confidence
+
+  ```bash
+  ['PAIN', 0.9934559464454651]
+  ```
+
+**Version**
+paddleocr uses the PP-OCRv3 model by default(`--ocr_version PP-OCRv3`). If you want to use other versions, you can set the parameter `--ocr_version`, the specific version description is as follows:
+|  version name |  description |
+|    ---    |   ---   |
+| PP-OCRv3 | support Chinese and English detection and recognition, direction classifier, support multilingual recognition |
+| PP-OCRv2 | only supports Chinese and English detection and recognition, direction classifier, multilingual model is not updated |
+| PP-OCR   | support Chinese and English detection and recognition, direction classifier, support multilingual recognition |
+
+If you want to add your own trained model, you can add model links and keys in [paddleocr](../../paddleocr.py) and recompile.
+
+More whl package usage can be found in [whl package](./whl_en.md)
+
+<a name="212-multi-language-model"></a>
+
+#### 2.1.2 Multi-language Model
+
+PaddleOCR currently supports 80 languages, which can be switched by modifying the `--lang` parameter.
+
+``` bash
+paddleocr --image_dir ./doc/imgs_en/254.jpg --lang=en
 ```
 
-* Note
-    - If you want to use the recognition model which does not support space char recognition, please update the source code to the latest version and add parameters `--use_space_char=False`.
-    - If you do not want to use direction classifier, please update the source code to the latest version and add parameters `--use_angle_cls=False`.
+<div align="center">
+    <img src="../imgs_en/254.jpg" width="300" height="600">
+    <img src="../imgs_results/multi_lang/img_02.jpg" width="600" height="600">
+</div>
+The result is a list, each item contains a text box, text and recognition confidence
+
+```text
+[[[67.0, 51.0], [327.0, 46.0], [327.0, 74.0], [68.0, 80.0]], ('PHOCAPITAL', 0.9944712519645691)]
+[[[72.0, 92.0], [453.0, 84.0], [454.0, 114.0], [73.0, 122.0]], ('107 State Street', 0.9744491577148438)]
+[[[69.0, 135.0], [501.0, 125.0], [501.0, 156.0], [70.0, 165.0]], ('Montpelier Vermont', 0.9357033967971802)]
+......
+```
+
+Commonly used multilingual abbreviations include
+
+| Language            | Abbreviation |      | Language | Abbreviation |      | Language | Abbreviation |
+| ------------------- | ------------ | ---- | -------- | ------------ | ---- | -------- | ------------ |
+| Chinese & English   | ch           |      | French   | fr           |      | Japanese | japan        |
+| English             | en           |      | German   | german       |      | Korean   | korean       |
+| Chinese Traditional | chinese_cht  |      | Italian  | it           |      | Russian  | ru           |
+
+A list of all languages and their corresponding abbreviations can be found in [Multi-Language Model Tutorial](./multi_languages_en.md)
 
 
-For more text detection and recognition tandem reasoning, please refer to the document tutorial
-: [Inference with Python inference engine](./inference_en.md)。
+<a name="22-use-by-code"></a>
 
-In addition, the tutorial also provides other deployment methods for the Chinese OCR model:
-- [Server-side C++ inference](../../deploy/cpp_infer/readme_en.md)
-- [Service deployment](../../deploy/hubserving)
-- [End-to-end deployment](https://github.com/PaddlePaddle/PaddleOCR/tree/develop/deploy/lite)
+### 2.2 Use by Code
+<a name="221-chinese---english-model-and-multilingual-model"></a>
+
+#### 2.2.1 Chinese & English Model and Multilingual Model
+
+* detection, angle classification and recognition:
+
+```python
+from paddleocr import PaddleOCR,draw_ocr
+# Paddleocr supports Chinese, English, French, German, Korean and Japanese.
+# You can set the parameter `lang` as `ch`, `en`, `fr`, `german`, `korean`, `japan`
+# to switch the language model in order.
+ocr = PaddleOCR(use_angle_cls=True, lang='en') # need to run only once to download and load model into memory
+img_path = './imgs_en/img_12.jpg'
+result = ocr.ocr(img_path, cls=True)
+for line in result:
+    print(line)
+
+
+# draw result
+from PIL import Image
+image = Image.open(img_path).convert('RGB')
+boxes = [line[0] for line in result]
+txts = [line[1][0] for line in result]
+scores = [line[1][1] for line in result]
+im_show = draw_ocr(image, boxes, txts, scores, font_path='./fonts/simfang.ttf')
+im_show = Image.fromarray(im_show)
+im_show.save('result.jpg')
+```
+
+Output will be a list, each item contains bounding box, text and recognition confidence
+
+```bash
+[[[441.0, 174.0], [1166.0, 176.0], [1165.0, 222.0], [441.0, 221.0]], ('ACKNOWLEDGEMENTS', 0.9971134662628174)]
+  [[[403.0, 346.0], [1204.0, 348.0], [1204.0, 384.0], [402.0, 383.0]], ('We would like to thank all the designers and', 0.9761400818824768)]
+  [[[403.0, 396.0], [1204.0, 398.0], [1204.0, 434.0], [402.0, 433.0]], ('contributors who have been involved in the', 0.9791957139968872)]
+  ......
+```
+
+Visualization of results
+
+<div align="center">
+    <img src="../imgs_results/whl/12_det_rec.jpg" width="800">
+</div>
+
+
+<a name="3"></a>
+
+## 3. Summary
+
+In this section, you have mastered the use of PaddleOCR whl package.
+
+PaddleOCR is a rich and practical OCR tool library that get through the whole process of data production, model training, compression, inference and deployment, please refer to the [tutorials](../../README.md#tutorials) to start the journey of PaddleOCR.

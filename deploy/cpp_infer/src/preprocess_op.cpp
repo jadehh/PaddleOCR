@@ -40,6 +40,18 @@ void Permute::Run(const cv::Mat *im, float *data) {
   }
 }
 
+void PermuteBatch::Run(const std::vector<cv::Mat> imgs, float *data) {
+  for (int j = 0; j < imgs.size(); j++) {
+    int rh = imgs[j].rows;
+    int rw = imgs[j].cols;
+    int rc = imgs[j].channels();
+    for (int i = 0; i < rc; ++i) {
+      cv::extractChannel(
+          imgs[j], cv::Mat(rh, rw, CV_32FC1, data + (j * rc + i) * rh * rw), i);
+    }
+  }
+}
+
 void Normalize::Run(cv::Mat *im, const std::vector<float> &mean,
                     const std::vector<float> &scale, const bool is_scale) {
   double e = 1.0;
@@ -57,18 +69,28 @@ void Normalize::Run(cv::Mat *im, const std::vector<float> &mean,
 }
 
 void ResizeImgType0::Run(const cv::Mat &img, cv::Mat &resize_img,
-                         int max_size_len, float &ratio_h, float &ratio_w,
-                         bool use_tensorrt) {
+                         string limit_type, int limit_side_len, float &ratio_h,
+                         float &ratio_w, bool use_tensorrt) {
   int w = img.cols;
   int h = img.rows;
-
   float ratio = 1.f;
-  int max_wh = w >= h ? w : h;
-  if (max_wh > max_size_len) {
-    if (h > w) {
-      ratio = float(max_size_len) / float(h);
-    } else {
-      ratio = float(max_size_len) / float(w);
+  if (limit_type == "min") {
+    int min_wh = min(h, w);
+    if (min_wh < limit_side_len) {
+      if (h < w) {
+        ratio = float(limit_side_len) / float(h);
+      } else {
+        ratio = float(limit_side_len) / float(w);
+      }
+    }
+  } else {
+    int max_wh = max(h, w);
+    if (max_wh > limit_side_len) {
+      if (h > w) {
+        ratio = float(limit_side_len) / float(h);
+      } else {
+        ratio = float(limit_side_len) / float(w);
+      }
     }
   }
 
@@ -91,10 +113,11 @@ void CrnnResizeImg::Run(const cv::Mat &img, cv::Mat &resize_img, float wh_ratio,
   imgH = rec_image_shape[1];
   imgW = rec_image_shape[2];
 
-  imgW = int(32 * wh_ratio);
+  imgW = int(imgH * wh_ratio);
 
   float ratio = float(img.cols) / float(img.rows);
   int resize_w, resize_h;
+
   if (ceilf(imgH * ratio) > imgW)
     resize_w = imgW;
   else
@@ -128,6 +151,28 @@ void ClsResizeImg::Run(const cv::Mat &img, cv::Mat &resize_img,
     cv::copyMakeBorder(resize_img, resize_img, 0, 0, 0, imgW - resize_w,
                        cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
   }
+}
+
+void TableResizeImg::Run(const cv::Mat &img, cv::Mat &resize_img,
+                         const int max_len) {
+  int w = img.cols;
+  int h = img.rows;
+
+  int max_wh = w >= h ? w : h;
+  float ratio = w >= h ? float(max_len) / float(w) : float(max_len) / float(h);
+
+  int resize_h = int(float(h) * ratio);
+  int resize_w = int(float(w) * ratio);
+
+  cv::resize(img, resize_img, cv::Size(resize_w, resize_h));
+}
+
+void TablePadImg::Run(const cv::Mat &img, cv::Mat &resize_img,
+                      const int max_len) {
+  int w = img.cols;
+  int h = img.rows;
+  cv::copyMakeBorder(img, resize_img, 0, max_len - h, 0, max_len - w,
+                     cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
 }
 
 } // namespace PaddleOCR

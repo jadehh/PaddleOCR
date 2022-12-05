@@ -1,34 +1,98 @@
-# Paddle OCR
+# PaddleOCR
 
-## è®­ç»ƒ
+## ÑµÁ·
 
-### è®­ç»ƒæ°´å¹³ç®±å·è¯†åˆ«æ¨¡å‹
-
+### ÑµÁ·ÏäºÅ×Ö·û¼ì²âÄ£ĞÍ
 ```bash
-python train.py -c configs/rec/container/rec_contanum_h_train_ctc.yml
-python train.py -c configs/rec/container/rec_contanum_h_mv3_tps_bilstm_ctc.yml
+python tools/train.py -c configs/det/container/container_PP-OCRv2_det_distill.yml --eval
+python tools/train.py -c configs/det/container/container_det_mv3_db.yml
+python tools/train.py -c configs/det/container/container_det_mv3_db_v2.0_512_384.yml
 
 ```
 
-### è®­ç»ƒå‚ç›´ç®±å·è¯†åˆ«æ¨¡å‹
-
+### ÑµÁ·Ë®Æ½ÏäºÅÊ¶±ğÄ£ĞÍ
 ```bash
-python train.py -c configs/rec/container/rec_contanum_v_train_ctc.yml
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_rec_SVTR_H.yml 
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_rec_CRNN_H.yml
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_rec_SVTR-Tiny_H.yml
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_PP-OCRv3_rec_H.yml 
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_PP-OCRv3_rec_distillation-H.yml
+python tools/train.py -c configs/rec/container_number/container_number_h/container_rec_lite_train_H.yml
+python tools/train.py -c configs/rec/container_number/container_number_h/container_rec_lite_train_v2.0_H.yml
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_PP-OCRv2_rec.yml
+
 ```
 
-## æ¢å¤è®­ç»ƒ
-
-### æ¢å¤è®­ç»ƒæ°´å¹³ç®±å·è¯†åˆ«æ¨¡å‹
+### ÑµÁ·´¹Ö±ÏäºÅÊ¶±ğÄ£ĞÍ
 
 ```bash
-python train.py -c configs/rec/container/rec_contanum_h_train_ctc.yml -o Global.checkpoints=E:\Models\Paddle2.1\ç®±å·è¯†åˆ«æ¨¡å‹\æ°´å¹³ç®±å·è¯†åˆ«æ¨¡å‹\CRNN-CTC\2021-08-06\latest
+python tools/train.py -c configs/rec/container_number/container_number_v/container_rec_lite_train_V.yml
 ```
 
-## æ¨¡å‹å¯¼å‡º
+## »Ö¸´ÑµÁ·
 
-
-### å¯¼å‡ºæ°´å¹³ç®±å·è¯†åˆ«æ¨¡å‹
+### »Ö¸´ÑµÁ·Ë®Æ½ÏäºÅÊ¶±ğÄ£ĞÍ
 
 ```bash
-python export_model.py -c configs/rec/container/rec_contanum_h_train_ctc.yml -o Global.checkpoints=/mnt/e/Models/Paddle2.1/ç®±å·è¯†åˆ«æ¨¡å‹/æ°´å¹³ç®±å·è¯†åˆ«æ¨¡å‹/CRNN-CTC/2021-08-06/latest Global.save_inference_dir=/mnt/e/Models/Paddle2.1/ç®±å·è¯†åˆ«æ¨¡å‹/æ°´å¹³ç®±å·è¯†åˆ«æ¨¡å‹/CRNN-CTC/2021-08-06/2021-08-06
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_rec_SVTR-Tiny_H.yml -o Global.pretrained_model=output/rec/container_number_rec_SVTR-Tiny_H/best_accuracy
+python tools/train.py -c configs/rec/container_number/container_number_h/container_rec_lite_train_H.yml -o Global.pretrained_model=output/rec/container_rec_lite/latest
+python tools/train.py -c configs/rec/container_number/container_number_h/container_number_PP-OCRv2_rec.yml -o Global.pretrained_model=output/rec/container_number_PP-OCRv2_rec/latest
+
 ```
+
+### »Ö¸´ÑµÁ·ÏäºÅ×Ö·û¼ì²âÄ£ĞÍ
+
+```bash 
+
+python tools/train.py -c configs/det/container/container_det_mv3_db.yml -o Global.pretrained_model=output/det/container_det_mv3_db/latest
+python tools/train.py -c configs/det/container/container_det_mv3_db_v2.0_512_384.yml -o Global.pretrained_model=output/det/container/container_det_mv3_db_v2.0_512_384/latest
+
+```
+
+## Ä£ĞÍµ¼³ö
+
+### µ¼³öË®Æ½ÏäºÅÊ¶±ğÄ£ĞÍ
+
+```bash
+python tools/export_model.py -c configs/rec/container_number/container_number_h/container_number_rec_SVTR-Tiny_H.yml -o Global.pretrained_model=output/rec/container_number_rec_SVTR-Tiny_H/best_accuracy  Global.save_inference_dir=models/container_number_rec_SVTR-Tiny_H/ 
+python tools/export_model.py -c configs/rec/container_number/container_number_h/container_rec_lite_train_H.yml -o Global.pretrained_model=output/rec/container_rec_lite/best_accuracy  Global.save_inference_dir=models/container_rec_lite/2022-10-09/
+python tools/export_model.py -c configs/rec/container_number/container_number_h/container_number_rec_SVTR-Tiny_H.yml -o Global.pretrained_model=output/rec/container_number_rec_SVTR-Tiny_H/best_accuracy  Global.save_inference_dir=models/container_number_rec_SVTR-Tiny_H/2022-10-09/
+python tools/export_model.py -c configs/rec/container_number/container_number_h/container_rec_lite_train_v2.0_H.yml -o Global.pretrained_model=output/rec/container_rec_lite_train_v2.0/latest  Global.save_inference_dir=models/container_rec_lite_v2.0/2022-10-10
+python tools/export_model.py -c configs/rec/container_number/container_number_h/container_number_PP-OCRv2_rec.yml -o Global.pretrained_model=output/rec/container_number_PP-OCRv2_rec/best_accuracy  Global.save_inference_dir=models/container_number_PP-OCRv2_rec/2022-11-08
+
+
+```
+### µ¼³ö´¹Ö±ÏäºÅÊ¶±ğÄ£ĞÍ
+```bash
+python tools/export_model.py -c configs/rec/container_number/container_number_v/container_rec_lite_train_V.yml  -o Global.pretrained_model=output/rec/container_number_v/container_rec_lite_train_V/best_accuracy Global.save_inference_dir=models/container_number_v/container_rec_lite_train_V/2022-10-09
+``` 
+
+
+### µ¼³öÏäºÅ×Ö·û¼ì²âÄ£ĞÍ
+```bash
+python tools/export_model.ppython tools/export_model.py -c configs/det/container/container_det_mv3_db.yml  -o Global.pretrained_model=output/det/container_det_mv3_db/best_accuracy Global.save_inference_dir=models/container_det_mv3_db/2022-10-09/
+python tools/export_model.py -c configs/det/container/container_det_mv3_db_v2.0_512_384.yml  -o Global.pretrained_model=output/det/container/container_det_mv3_db_v2.0_512_384/best_accuracy Global.save_inference_dir=models/det/container/container_det_mv3_db_v2.0_512_384/2022-11-18/
+
+```
+
+## ²âÊÔ
+
+### ²âÊÔË®Æ½ÏäºÅÊ¶±ğÄ£ĞÍ
+
+```bash
+python tools/infer_rec.py -c configs/rec/container_number/container_number_h/container_number_rec_SVTR-Tiny_H.yml -o Global.pretrained_model=output/rec/container_number_rec_SVTR-Tiny_H/best_accuracy Global.infer_img=E:\Data\OCR\container_number\OCRH\2022-09-07\train
+python tools/infer/predict_rec.py --rec_image_shape=3,80,400 --image_dir=E:\Data\OCR\container_number\OCRH\2022-09-07\train --rec_model_dir=inference/container_number_rec_SVTR-Tiny_H --rec_char_dict_path=chardicts/containernumber.txt 
+python predict_rec.py  --rec_image_shape=3,32,320 --dataset_dir=E:\Data\OCR\container_number\OCRH\  --rec_model_dir=models/container_rec_lite/2022-10-09 --rec_char_dict_path=chardicts/containernumber.txt
+python predict_rec.py  --rec_image_shape=3,48,800 --dataset_dir=E:\Data\OCR\container_number\OCRH\  --rec_model_dir=models/container_number_rec_SVTR-Tiny_H/2022-10-09 --rec_char_dict_path=chardicts/containernumber.txt
+python predict_rec.py  --rec_image_shape=3,32,320 --dataset_dir=E:\Data\OCR\container_number\OCRH\  --rec_model_dir=models/container_rec_lite/2022-10-09 --rec_char_dict_path=chardicts/containernumber.txt
+
+```
+
+### ²âÊÔ´¹Ö±ÏäºÅÊ¶±ğÄ£ĞÍ
+
+```bash
+python predict_rec.py  --rec_image_shape=3,32,320 --dataset_dir=E:\Data\OCR\container_number\OCRV\  --rec_model_dir=models/container_number_v/container_rec_lite_train_V/2022-10-09 --rec_char_dict_path=chardicts/containernumber.txt
+```
+
+
+

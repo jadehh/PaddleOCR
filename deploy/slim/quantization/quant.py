@@ -37,7 +37,7 @@ from ppocr.losses import build_loss
 from ppocr.optimizer import build_optimizer
 from ppocr.postprocess import build_post_process
 from ppocr.metrics import build_metric
-from ppocr.utils.save_load import init_model
+from ppocr.utils.save_load import load_model
 import tools.program as program
 from paddleslim.dygraph.quant import QAT
 
@@ -112,13 +112,62 @@ def main(config, device, logger, vdl_writer):
         if config['Architecture']["algorithm"] in ["Distillation",
                                                    ]:  # distillation model
             for key in config['Architecture']["Models"]:
-                config['Architecture']["Models"][key]["Head"][
-                    'out_channels'] = char_num
+                if config['Architecture']['Models'][key]['Head'][
+                        'name'] == 'MultiHead':  # for multi head
+                    if config['PostProcess'][
+                            'name'] == 'DistillationSARLabelDecode':
+                        char_num = char_num - 2
+                    # update SARLoss params
+                    assert list(config['Loss']['loss_config_list'][-1].keys())[
+                        0] == 'DistillationSARLoss'
+                    config['Loss']['loss_config_list'][-1][
+                        'DistillationSARLoss']['ignore_index'] = char_num + 1
+                    out_channels_list = {}
+                    out_channels_list['CTCLabelDecode'] = char_num
+                    out_channels_list['SARLabelDecode'] = char_num + 2
+                    config['Architecture']['Models'][key]['Head'][
+                        'out_channels_list'] = out_channels_list
+                else:
+                    config['Architecture']["Models"][key]["Head"][
+                        'out_channels'] = char_num
+        elif config['Architecture']['Head'][
+                'name'] == 'MultiHead':  # for multi head
+            if config['PostProcess']['name'] == 'SARLabelDecode':
+                char_num = char_num - 2
+            # update SARLoss params
+            assert list(config['Loss']['loss_config_list'][1].keys())[
+                0] == 'SARLoss'
+            if config['Loss']['loss_config_list'][1]['SARLoss'] is None:
+                config['Loss']['loss_config_list'][1]['SARLoss'] = {
+                    'ignore_index': char_num + 1
+                }
+            else:
+                config['Loss']['loss_config_list'][1]['SARLoss'][
+                    'ignore_index'] = char_num + 1
+            out_channels_list = {}
+            out_channels_list['CTCLabelDecode'] = char_num
+            out_channels_list['SARLabelDecode'] = char_num + 2
+            config['Architecture']['Head'][
+                'out_channels_list'] = out_channels_list
         else:  # base rec model
             config['Architecture']["Head"]['out_channels'] = char_num
+
+        if config['PostProcess']['name'] == 'SARLabelDecode':  # for SAR model
+            config['Loss']['ignore_index'] = char_num - 1
     model = build_model(config['Architecture'])
 
-    quanter = QAT(config=quant_config, act_preprocess=PACT)
+    pre_best_model_dict = dict()
+    # load fp32 model to begin quantization
+    if config["Global"]["pretrained_model"] is not None:
+        pre_best_model_dict = load_model(config, model)
+
+    freeze_params = False
+    if config['Architecture']["algorithm"] in ["Distillation"]:
+        for key in config['Architecture']["Models"]:
+            freeze_params = freeze_params or config['Architecture']['Models'][
+                key].get('freeze_params', False)
+    act = None if freeze_params else PACT
+    quanter = QAT(config=quant_config, act_preprocess=act)
     quanter.quantize(model)
 
     if config['Global']['distributed']:
@@ -132,12 +181,14 @@ def main(config, device, logger, vdl_writer):
         config['Optimizer'],
         epochs=config['Global']['epoch_num'],
         step_each_epoch=len(train_dataloader),
-        parameters=model.parameters())
+        model=model)
+
+    # resume PACT training process
+    if config["Global"]["checkpoints"] is not None:
+        pre_best_model_dict = load_model(config, model, optimizer)
 
     # build metric
     eval_class = build_metric(config['Metric'])
-    # load pretrain model
-    pre_best_model_dict = init_model(config, model, logger, optimizer)
 
     logger.info('train dataloader has {} iters, valid dataloader has {} iters'.
                 format(len(train_dataloader), len(valid_dataloader)))

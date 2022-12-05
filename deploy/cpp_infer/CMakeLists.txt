@@ -1,4 +1,5 @@
-project(ocr_system CXX C)
+project(ppocr CXX C)
+cmake_minimum_required(VERSION 3.14)
 
 option(WITH_MKL        "Compile demo with MKL/OpenBlas support, default use MKL."       ON)
 option(WITH_GPU        "Compile demo with GPU/CPU, default use CPU."                    OFF)
@@ -11,7 +12,8 @@ SET(CUDA_LIB "" CACHE PATH "Location of libraries")
 SET(CUDNN_LIB "" CACHE PATH "Location of libraries")
 SET(TENSORRT_DIR "" CACHE PATH "Compile demo with TensorRT")
 
-set(DEMO_NAME "ocr_system")
+set(DEMO_NAME "ppocr")
+
 
 macro(safe_set_static_flag)
     foreach(flag_var
@@ -37,10 +39,8 @@ endif()
 
 
 if (WIN32)
-  include_directories("${PADDLE_LIB}/paddle/fluid/inference")
   include_directories("${PADDLE_LIB}/paddle/include")
   link_directories("${PADDLE_LIB}/paddle/lib")
-  link_directories("${PADDLE_LIB}/paddle/fluid/inference")
   find_package(OpenCV REQUIRED PATHS ${OPENCV_DIR}/build/ NO_DEFAULT_PATH)
 
 else ()
@@ -92,6 +92,8 @@ include_directories("${PADDLE_LIB}/third_party/install/glog/include")
 include_directories("${PADDLE_LIB}/third_party/install/gflags/include")
 include_directories("${PADDLE_LIB}/third_party/install/xxhash/include")
 include_directories("${PADDLE_LIB}/third_party/install/zlib/include")
+include_directories("${PADDLE_LIB}/third_party/install/onnxruntime/include")
+include_directories("${PADDLE_LIB}/third_party/install/paddle2onnx/include")
 include_directories("${PADDLE_LIB}/third_party/boost")
 include_directories("${PADDLE_LIB}/third_party/eigen3")
 
@@ -110,6 +112,8 @@ link_directories("${PADDLE_LIB}/third_party/install/protobuf/lib")
 link_directories("${PADDLE_LIB}/third_party/install/glog/lib")
 link_directories("${PADDLE_LIB}/third_party/install/gflags/lib")
 link_directories("${PADDLE_LIB}/third_party/install/xxhash/lib")
+link_directories("${PADDLE_LIB}/third_party/install/onnxruntime/lib")
+link_directories("${PADDLE_LIB}/third_party/install/paddle2onnx/lib")
 link_directories("${PADDLE_LIB}/paddle/lib")
 
 
@@ -207,9 +211,12 @@ endif()
 
 set(DEPS ${DEPS} ${OpenCV_LIBS})
 
+include(FetchContent)
+include(external-cmake/auto-log.cmake)
+include_directories(${FETCHCONTENT_BASE_DIR}/extern_autolog-src)
+
 AUX_SOURCE_DIRECTORY(./src SRCS)
 add_executable(${DEMO_NAME} ${SRCS})
-
 target_link_libraries(${DEMO_NAME} ${DEPS})
 
 if (WIN32 AND WITH_MKL)

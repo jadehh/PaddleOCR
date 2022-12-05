@@ -56,31 +56,44 @@ class CELoss(nn.Layer):
 
 class KLJSLoss(object):
     def __init__(self, mode='kl'):
-        assert mode in ['kl', 'js', 'KL', 'JS'], "mode can only be one of ['kl', 'js', 'KL', 'JS']"
+        assert mode in ['kl', 'js', 'KL', 'JS'
+                        ], "mode can only be one of ['kl', 'KL', 'js', 'JS']"
         self.mode = mode
 
-    def __call__(self, p1, p2, reduction="mean"):
+    def __call__(self, p1, p2, reduction="mean", eps=1e-5):
 
-        loss = paddle.multiply(p2, paddle.log( (p2+1e-5)/(p1+1e-5) + 1e-5))
-
-        if self.mode.lower() == "js":
-            loss += paddle.multiply(p1, paddle.log((p1+1e-5)/(p2+1e-5) + 1e-5))
+        if self.mode.lower() == 'kl':
+            loss = paddle.multiply(p2,
+                                   paddle.log((p2 + eps) / (p1 + eps) + eps))
+            loss += paddle.multiply(
+                p1, paddle.log((p1 + eps) / (p2 + eps) + eps))
             loss *= 0.5
-        if reduction == "mean":
-            loss = paddle.mean(loss, axis=[1,2])
-        elif reduction=="none" or reduction is None:
-            return loss 
+        elif self.mode.lower() == "js":
+            loss = paddle.multiply(
+                p2, paddle.log((2 * p2 + eps) / (p1 + p2 + eps) + eps))
+            loss += paddle.multiply(
+                p1, paddle.log((2 * p1 + eps) / (p1 + p2 + eps) + eps))
+            loss *= 0.5
         else:
-            loss = paddle.sum(loss, axis=[1,2])
+            raise ValueError(
+                "The mode.lower() if KLJSLoss should be one of ['kl', 'js']")
 
-        return loss 
+        if reduction == "mean":
+            loss = paddle.mean(loss, axis=[1, 2])
+        elif reduction == "none" or reduction is None:
+            return loss
+        else:
+            loss = paddle.sum(loss, axis=[1, 2])
+
+        return loss
+
 
 class DMLLoss(nn.Layer):
     """
     DMLLoss
     """
 
-    def __init__(self, act=None):
+    def __init__(self, act=None, use_log=False):
         super().__init__()
         if act is not None:
             assert act in ["softmax", "sigmoid"]
@@ -90,20 +103,29 @@ class DMLLoss(nn.Layer):
             self.act = nn.Sigmoid()
         else:
             self.act = None
-        
-        self.jskl_loss = KLJSLoss(mode="js")
+
+        self.use_log = use_log
+        self.jskl_loss = KLJSLoss(mode="kl")
+
+    def _kldiv(self, x, target):
+        eps = 1.0e-10
+        loss = target * (paddle.log(target + eps) - x)
+        # batch mean loss
+        loss = paddle.sum(loss) / loss.shape[0]
+        return loss
 
     def forward(self, out1, out2):
         if self.act is not None:
-            out1 = self.act(out1)
-            out2 = self.act(out2)
-        if len(out1.shape) < 2:
+            out1 = self.act(out1) + 1e-10
+            out2 = self.act(out2) + 1e-10
+        if self.use_log:
+            # for recognition distillation, log is needed for feature map
             log_out1 = paddle.log(out1)
             log_out2 = paddle.log(out2)
-            loss = (F.kl_div(
-                log_out1, out2, reduction='batchmean') + F.kl_div(
-                    log_out2, out1, reduction='batchmean')) / 2.0
+            loss = (
+                self._kldiv(log_out1, out2) + self._kldiv(log_out2, out1)) / 2.0
         else:
+            # distillation log is not needed for detection 
             loss = self.jskl_loss(out1, out2)
         return loss
 
@@ -126,3 +148,20 @@ class DistanceLoss(nn.Layer):
 
     def forward(self, x, y):
         return self.loss_func(x, y)
+
+
+class LossFromOutput(nn.Layer):
+    def __init__(self, key='loss', reduction='none'):
+        super().__init__()
+        self.key = key
+        self.reduction = reduction
+
+    def forward(self, predicts, batch):
+        loss = predicts
+        if self.key is not None and isinstance(predicts, dict):
+            loss = loss[self.key]
+        if self.reduction == 'mean':
+            loss = paddle.mean(loss)
+        elif self.reduction == 'sum':
+            loss = paddle.sum(loss)
+        return {'loss': loss}

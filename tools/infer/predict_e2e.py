@@ -16,7 +16,7 @@ import sys
 
 __dir__ = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(__dir__)
-sys.path.append(os.path.abspath(os.path.join(__dir__, '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(__dir__, '../..')))
 
 os.environ["FLAGS_allocator_strategy"] = 'auto_growth'
 
@@ -27,7 +27,7 @@ import sys
 
 import tools.infer.utility as utility
 from ppocr.utils.logging import get_logger
-from ppocr.utils.utility import get_image_file_list, check_and_read_gif
+from ppocr.utils.utility import get_image_file_list, check_and_read
 from ppocr.data import create_operators, transform
 from ppocr.postprocess import build_post_process
 
@@ -38,6 +38,7 @@ class TextE2E(object):
     def __init__(self, args):
         self.args = args
         self.e2e_algorithm = args.e2e_algorithm
+        self.use_onnx = args.use_onnx
         pre_process_list = [{
             'E2EResizeForTest': {}
         }, {
@@ -67,14 +68,13 @@ class TextE2E(object):
             postprocess_params["character_dict_path"] = args.e2e_char_dict_path
             postprocess_params["valid_set"] = args.e2e_pgnet_valid_set
             postprocess_params["mode"] = args.e2e_pgnet_mode
-            self.e2e_pgnet_polygon = args.e2e_pgnet_polygon
         else:
             logger.info("unknown e2e_algorithm:{}".format(self.e2e_algorithm))
             sys.exit(0)
 
         self.preprocess_op = create_operators(pre_process_list)
         self.postprocess_op = build_post_process(postprocess_params)
-        self.predictor, self.input_tensor, self.output_tensors = utility.create_predictor(
+        self.predictor, self.input_tensor, self.output_tensors, _ = utility.create_predictor(
             args, 'e2e', logger)  # paddle.jit.load(args.det_model_dir)
         # self.predictor.eval()
 
@@ -106,21 +106,31 @@ class TextE2E(object):
         img = img.copy()
         starttime = time.time()
 
-        self.input_tensor.copy_from_cpu(img)
-        self.predictor.run()
-        outputs = []
-        for output_tensor in self.output_tensors:
-            output = output_tensor.copy_to_cpu()
-            outputs.append(output)
-
-        preds = {}
-        if self.e2e_algorithm == 'PGNet':
+        if self.use_onnx:
+            input_dict = {}
+            input_dict[self.input_tensor.name] = img
+            outputs = self.predictor.run(self.output_tensors, input_dict)
+            preds = {}
             preds['f_border'] = outputs[0]
             preds['f_char'] = outputs[1]
             preds['f_direction'] = outputs[2]
             preds['f_score'] = outputs[3]
         else:
-            raise NotImplementedError
+            self.input_tensor.copy_from_cpu(img)
+            self.predictor.run()
+            outputs = []
+            for output_tensor in self.output_tensors:
+                output = output_tensor.copy_to_cpu()
+                outputs.append(output)
+
+            preds = {}
+            if self.e2e_algorithm == 'PGNet':
+                preds['f_border'] = outputs[0]
+                preds['f_char'] = outputs[1]
+                preds['f_direction'] = outputs[2]
+                preds['f_score'] = outputs[3]
+            else:
+                raise NotImplementedError
         post_result = self.postprocess_op(preds, shape_list)
         points, strs = post_result['points'], post_result['texts']
         dt_boxes = self.filter_tag_det_res_only_clip(points, ori_im.shape)
@@ -138,7 +148,7 @@ if __name__ == "__main__":
     if not os.path.exists(draw_img_save):
         os.makedirs(draw_img_save)
     for image_file in image_file_list:
-        img, flag = check_and_read_gif(image_file)
+        img, flag, _ = check_and_read(image_file)
         if not flag:
             img = cv2.imread(image_file)
         if img is None:

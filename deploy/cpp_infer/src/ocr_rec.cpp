@@ -16,37 +16,62 @@
 
 namespace PaddleOCR {
 
-void CRNNRecognizer::Run(std::vector<std::vector<std::vector<int>>> boxes,
-                         cv::Mat &img, Classifier *cls) {
-  cv::Mat srcimg;
-  img.copyTo(srcimg);
-  cv::Mat crop_img;
-  cv::Mat resize_img;
+void CRNNRecognizer::Run(std::vector<cv::Mat> img_list,
+                         std::vector<std::string> &rec_texts,
+                         std::vector<float> &rec_text_scores,
+                         std::vector<double> &times) {
+  std::chrono::duration<float> preprocess_diff =
+      std::chrono::steady_clock::now() - std::chrono::steady_clock::now();
+  std::chrono::duration<float> inference_diff =
+      std::chrono::steady_clock::now() - std::chrono::steady_clock::now();
+  std::chrono::duration<float> postprocess_diff =
+      std::chrono::steady_clock::now() - std::chrono::steady_clock::now();
 
-  std::cout << "The predicted text is :" << std::endl;
-  int index = 0;
-  for (int i = 0; i < boxes.size(); i++) {
-    crop_img = GetRotateCropImage(srcimg, boxes[i]);
+  int img_num = img_list.size();
+  std::vector<float> width_list;
+  for (int i = 0; i < img_num; i++) {
+    width_list.push_back(float(img_list[i].cols) / img_list[i].rows);
+  }
+  std::vector<int> indices = Utility::argsort(width_list);
 
-    if (cls != nullptr) {
-      crop_img = cls->Run(crop_img);
+  for (int beg_img_no = 0; beg_img_no < img_num;
+       beg_img_no += this->rec_batch_num_) {
+    auto preprocess_start = std::chrono::steady_clock::now();
+    int end_img_no = min(img_num, beg_img_no + this->rec_batch_num_);
+    int batch_num = end_img_no - beg_img_no;
+    int imgH = this->rec_image_shape_[1];
+    int imgW = this->rec_image_shape_[2];
+    float max_wh_ratio = imgW * 1.0 / imgH;
+    for (int ino = beg_img_no; ino < end_img_no; ino++) {
+      int h = img_list[indices[ino]].rows;
+      int w = img_list[indices[ino]].cols;
+      float wh_ratio = w * 1.0 / h;
+      max_wh_ratio = max(max_wh_ratio, wh_ratio);
     }
 
-    float wh_ratio = float(crop_img.cols) / float(crop_img.rows);
+    int batch_width = imgW;
+    std::vector<cv::Mat> norm_img_batch;
+    for (int ino = beg_img_no; ino < end_img_no; ino++) {
+      cv::Mat srcimg;
+      img_list[indices[ino]].copyTo(srcimg);
+      cv::Mat resize_img;
+      this->resize_op_.Run(srcimg, resize_img, max_wh_ratio,
+                           this->use_tensorrt_, this->rec_image_shape_);
+      this->normalize_op_.Run(&resize_img, this->mean_, this->scale_,
+                              this->is_scale_);
+      norm_img_batch.push_back(resize_img);
+      batch_width = max(resize_img.cols, batch_width);
+    }
 
-    this->resize_op_.Run(crop_img, resize_img, wh_ratio, this->use_tensorrt_);
-
-    this->normalize_op_.Run(&resize_img, this->mean_, this->scale_,
-                            this->is_scale_);
-
-    std::vector<float> input(1 * 3 * resize_img.rows * resize_img.cols, 0.0f);
-
-    this->permute_op_.Run(&resize_img, input.data());
-
+    std::vector<float> input(batch_num * 3 * imgH * batch_width, 0.0f);
+    this->permute_op_.Run(norm_img_batch, input.data());
+    auto preprocess_end = std::chrono::steady_clock::now();
+    preprocess_diff += preprocess_end - preprocess_start;
     // Inference.
     auto input_names = this->predictor_->GetInputNames();
     auto input_t = this->predictor_->GetInputHandle(input_names[0]);
-    input_t->Reshape({1, 3, resize_img.rows, resize_img.cols});
+    input_t->Reshape({batch_num, 3, imgH, batch_width});
+    auto inference_start = std::chrono::steady_clock::now();
     input_t->CopyFromCpu(input.data());
     this->predictor_->Run();
 
@@ -58,38 +83,50 @@ void CRNNRecognizer::Run(std::vector<std::vector<std::vector<int>>> boxes,
     int out_num = std::accumulate(predict_shape.begin(), predict_shape.end(), 1,
                                   std::multiplies<int>());
     predict_batch.resize(out_num);
-
+    // predict_batch is the result of Last FC with softmax
     output_t->CopyToCpu(predict_batch.data());
-
+    auto inference_end = std::chrono::steady_clock::now();
+    inference_diff += inference_end - inference_start;
     // ctc decode
-    std::vector<std::string> str_res;
-    int argmax_idx;
-    int last_index = 0;
-    float score = 0.f;
-    int count = 0;
-    float max_value = 0.0f;
+    auto postprocess_start = std::chrono::steady_clock::now();
+    for (int m = 0; m < predict_shape[0]; m++) {
+      std::string str_res;
+      int argmax_idx;
+      int last_index = 0;
+      float score = 0.f;
+      int count = 0;
+      float max_value = 0.0f;
 
-    for (int n = 0; n < predict_shape[1]; n++) {
-      argmax_idx =
-          int(Utility::argmax(&predict_batch[n * predict_shape[2]],
-                              &predict_batch[(n + 1) * predict_shape[2]]));
-      max_value =
-          float(*std::max_element(&predict_batch[n * predict_shape[2]],
-                                  &predict_batch[(n + 1) * predict_shape[2]]));
+      for (int n = 0; n < predict_shape[1]; n++) {
+        // get idx
+        argmax_idx = int(Utility::argmax(
+            &predict_batch[(m * predict_shape[1] + n) * predict_shape[2]],
+            &predict_batch[(m * predict_shape[1] + n + 1) * predict_shape[2]]));
+        // get score
+        max_value = float(*std::max_element(
+            &predict_batch[(m * predict_shape[1] + n) * predict_shape[2]],
+            &predict_batch[(m * predict_shape[1] + n + 1) * predict_shape[2]]));
 
-      if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
-        score += max_value;
-        count += 1;
-        str_res.push_back(label_list_[argmax_idx]);
+        if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
+          score += max_value;
+          count += 1;
+          str_res += label_list_[argmax_idx];
+        }
+        last_index = argmax_idx;
       }
-      last_index = argmax_idx;
+      score /= count;
+      if (isnan(score)) {
+        continue;
+      }
+      rec_texts[indices[beg_img_no + m]] = str_res;
+      rec_text_scores[indices[beg_img_no + m]] = score;
     }
-    score /= count;
-    for (int i = 0; i < str_res.size(); i++) {
-      std::cout << str_res[i];
-    }
-    std::cout << "\tscore: " << score << std::endl;
+    auto postprocess_end = std::chrono::steady_clock::now();
+    postprocess_diff += postprocess_end - postprocess_start;
   }
+  times.push_back(double(preprocess_diff.count() * 1000));
+  times.push_back(double(inference_diff.count() * 1000));
+  times.push_back(double(postprocess_diff.count() * 1000));
 }
 
 void CRNNRecognizer::LoadModel(const std::string &model_dir) {
@@ -97,24 +134,26 @@ void CRNNRecognizer::LoadModel(const std::string &model_dir) {
   paddle_infer::Config config;
   config.SetModel(model_dir + "/inference.pdmodel",
                   model_dir + "/inference.pdiparams");
-
+  std::cout << "In PP-OCRv3, default rec_img_h is 48,"
+            << "if you use other model, you should set the param rec_img_h=32"
+            << std::endl;
   if (this->use_gpu_) {
     config.EnableUseGpu(this->gpu_mem_, this->gpu_id_);
     if (this->use_tensorrt_) {
-      config.EnableTensorRtEngine(
-          1 << 20, 10, 3,
-          this->use_fp16_ ? paddle_infer::Config::Precision::kHalf
-                          : paddle_infer::Config::Precision::kFloat32,
-          false, false);
-      std::map<std::string, std::vector<int>> min_input_shape = {
-          {"x", {1, 3, 32, 10}}};
-      std::map<std::string, std::vector<int>> max_input_shape = {
-          {"x", {1, 3, 32, 2000}}};
-      std::map<std::string, std::vector<int>> opt_input_shape = {
-          {"x", {1, 3, 32, 320}}};
-
-      config.SetTRTDynamicShapeInfo(min_input_shape, max_input_shape,
-                                    opt_input_shape);
+      auto precision = paddle_infer::Config::Precision::kFloat32;
+      if (this->precision_ == "fp16") {
+        precision = paddle_infer::Config::Precision::kHalf;
+      }
+      if (this->precision_ == "int8") {
+        precision = paddle_infer::Config::Precision::kInt8;
+      }
+      config.EnableTensorRtEngine(1 << 20, 10, 15, precision, false, false);
+      if (!Utility::PathExists("./trt_rec_shape.txt")){
+        config.CollectShapeRangeInfo("./trt_rec_shape.txt");
+      } else { 
+        config.EnableTunedTensorRtDynamicShape("./trt_rec_shape.txt", true);
+      }
+      
     }
   } else {
     config.DisableGpu();
@@ -126,6 +165,10 @@ void CRNNRecognizer::LoadModel(const std::string &model_dir) {
     config.SetCpuMathLibraryNumThreads(this->cpu_math_library_num_threads_);
   }
 
+  // get pass_builder object
+  auto pass_builder = config.pass_builder();
+  // delete "matmul_transpose_reshape_fuse_pass"
+  pass_builder->DeletePass("matmul_transpose_reshape_fuse_pass");
   config.SwitchUseFeedFetchOps(false);
   // true for multiple input
   config.SwitchSpecifyInputNames(true);
@@ -133,64 +176,9 @@ void CRNNRecognizer::LoadModel(const std::string &model_dir) {
   config.SwitchIrOptim(true);
 
   config.EnableMemoryOptim();
-  config.DisableGlogInfo();
+  //   config.DisableGlogInfo();
 
   this->predictor_ = CreatePredictor(config);
-}
-
-cv::Mat CRNNRecognizer::GetRotateCropImage(const cv::Mat &srcimage,
-                                           std::vector<std::vector<int>> box) {
-  cv::Mat image;
-  srcimage.copyTo(image);
-  std::vector<std::vector<int>> points = box;
-
-  int x_collect[4] = {box[0][0], box[1][0], box[2][0], box[3][0]};
-  int y_collect[4] = {box[0][1], box[1][1], box[2][1], box[3][1]};
-  int left = int(*std::min_element(x_collect, x_collect + 4));
-  int right = int(*std::max_element(x_collect, x_collect + 4));
-  int top = int(*std::min_element(y_collect, y_collect + 4));
-  int bottom = int(*std::max_element(y_collect, y_collect + 4));
-
-  cv::Mat img_crop;
-  image(cv::Rect(left, top, right - left, bottom - top)).copyTo(img_crop);
-
-  for (int i = 0; i < points.size(); i++) {
-    points[i][0] -= left;
-    points[i][1] -= top;
-  }
-
-  int img_crop_width = int(sqrt(pow(points[0][0] - points[1][0], 2) +
-                                pow(points[0][1] - points[1][1], 2)));
-  int img_crop_height = int(sqrt(pow(points[0][0] - points[3][0], 2) +
-                                 pow(points[0][1] - points[3][1], 2)));
-
-  cv::Point2f pts_std[4];
-  pts_std[0] = cv::Point2f(0., 0.);
-  pts_std[1] = cv::Point2f(img_crop_width, 0.);
-  pts_std[2] = cv::Point2f(img_crop_width, img_crop_height);
-  pts_std[3] = cv::Point2f(0.f, img_crop_height);
-
-  cv::Point2f pointsf[4];
-  pointsf[0] = cv::Point2f(points[0][0], points[0][1]);
-  pointsf[1] = cv::Point2f(points[1][0], points[1][1]);
-  pointsf[2] = cv::Point2f(points[2][0], points[2][1]);
-  pointsf[3] = cv::Point2f(points[3][0], points[3][1]);
-
-  cv::Mat M = cv::getPerspectiveTransform(pointsf, pts_std);
-
-  cv::Mat dst_img;
-  cv::warpPerspective(img_crop, dst_img, M,
-                      cv::Size(img_crop_width, img_crop_height),
-                      cv::BORDER_REPLICATE);
-
-  if (float(dst_img.rows) >= float(dst_img.cols) * 1.5) {
-    cv::Mat srcCopy = cv::Mat(dst_img.rows, dst_img.cols, dst_img.depth());
-    cv::transpose(dst_img, srcCopy);
-    cv::flip(srcCopy, srcCopy, 0);
-    return srcCopy;
-  } else {
-    return dst_img;
-  }
 }
 
 } // namespace PaddleOCR

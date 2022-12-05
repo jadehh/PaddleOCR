@@ -16,7 +16,7 @@ import sys
 
 __dir__ = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(__dir__)
-sys.path.append(os.path.abspath(os.path.join(__dir__, '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(__dir__, '../..')))
 
 os.environ["FLAGS_allocator_strategy"] = 'auto_growth'
 
@@ -30,7 +30,7 @@ import traceback
 import tools.infer.utility as utility
 from ppocr.postprocess import build_post_process
 from ppocr.utils.logging import get_logger
-from ppocr.utils.utility import get_image_file_list, check_and_read_gif
+from ppocr.utils.utility import get_image_file_list, check_and_read
 
 logger = get_logger()
 
@@ -47,6 +47,7 @@ class TextClassifier(object):
         self.postprocess_op = build_post_process(postprocess_params)
         self.predictor, self.input_tensor, self.output_tensors, _ = \
             utility.create_predictor(args, 'cls', logger)
+        self.use_onnx = args.use_onnx
 
     def resize_norm_img(self, img):
         imgC, imgH, imgW = self.cls_image_shape
@@ -100,10 +101,16 @@ class TextClassifier(object):
             norm_img_batch = np.concatenate(norm_img_batch)
             norm_img_batch = norm_img_batch.copy()
 
-            self.input_tensor.copy_from_cpu(norm_img_batch)
-            self.predictor.run()
-            prob_out = self.output_tensors[0].copy_to_cpu()
-            self.predictor.try_shrink_memory()
+            if self.use_onnx:
+                input_dict = {}
+                input_dict[self.input_tensor.name] = norm_img_batch
+                outputs = self.predictor.run(self.output_tensors, input_dict)
+                prob_out = outputs[0]
+            else:
+                self.input_tensor.copy_from_cpu(norm_img_batch)
+                self.predictor.run()
+                prob_out = self.output_tensors[0].copy_to_cpu()
+                self.predictor.try_shrink_memory()
             cls_result = self.postprocess_op(prob_out)
             elapse += time.time() - starttime
             for rno in range(len(cls_result)):
@@ -121,7 +128,7 @@ def main(args):
     valid_image_file_list = []
     img_list = []
     for image_file in image_file_list:
-        img, flag = check_and_read_gif(image_file)
+        img, flag, _ = check_and_read(image_file)
         if not flag:
             img = cv2.imread(image_file)
         if img is None:
@@ -131,20 +138,13 @@ def main(args):
         img_list.append(img)
     try:
         img_list, cls_res, predict_time = text_classifier(img_list)
-    except:
+    except Exception as E:
         logger.info(traceback.format_exc())
-        logger.info(
-            "ERROR!!!! \n"
-            "Please read the FAQ：https://github.com/PaddlePaddle/PaddleOCR#faq \n"
-            "If your model has tps module:  "
-            "TPS does not support variable shape.\n"
-            "Please set --rec_image_shape='3,32,100' and --rec_char_type='en' ")
+        logger.info(E)
         exit()
     for ino in range(len(img_list)):
         logger.info("Predicts of {}:{}".format(valid_image_file_list[ino],
                                                cls_res[ino]))
-    logger.info(
-        "The predict time about text angle classify module is as follows: ")
 
 
 if __name__ == "__main__":

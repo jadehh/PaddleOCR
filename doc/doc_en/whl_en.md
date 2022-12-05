@@ -1,4 +1,4 @@
-# paddleocr package
+# Paddleocr Package
 
 ## 1 Get started quickly
 ### 1.1 install package
@@ -179,9 +179,9 @@ paddleocr --image_dir PaddleOCR/doc/imgs_en/img_12.jpg --use_angle_cls true --la
 
 Output will be a list, each item contains bounding box, text and recognition confidence
 ```bash
-[[[442.0, 173.0], [1169.0, 173.0], [1169.0, 225.0], [442.0, 225.0]], ['ACKNOWLEDGEMENTS', 0.99283075]]
-[[[393.0, 340.0], [1207.0, 342.0], [1207.0, 389.0], [393.0, 387.0]], ['We would like to thank all the designers and', 0.9357758]]
-[[[399.0, 398.0], [1204.0, 398.0], [1204.0, 433.0], [399.0, 433.0]], ['contributors whohave been involved in the', 0.9592447]]
+[[[441.0, 174.0], [1166.0, 176.0], [1165.0, 222.0], [441.0, 221.0]], ('ACKNOWLEDGEMENTS', 0.9971134662628174)]
+[[[403.0, 346.0], [1204.0, 348.0], [1204.0, 384.0], [402.0, 383.0]], ('We would like to thank all the designers and', 0.9761400818824768)]
+[[[403.0, 396.0], [1204.0, 398.0], [1204.0, 434.0], [402.0, 433.0]], ('contributors who have been involved in the', 0.9791957139968872)]
 ......
 ```
 
@@ -192,9 +192,9 @@ paddleocr --image_dir PaddleOCR/doc/imgs_en/img_12.jpg --lang en
 
 Output will be a list, each item contains bounding box, text and recognition confidence
 ```bash
-[[[442.0, 173.0], [1169.0, 173.0], [1169.0, 225.0], [442.0, 225.0]], ['ACKNOWLEDGEMENTS', 0.99283075]]
-[[[393.0, 340.0], [1207.0, 342.0], [1207.0, 389.0], [393.0, 387.0]], ['We would like to thank all the designers and', 0.9357758]]
-[[[399.0, 398.0], [1204.0, 398.0], [1204.0, 433.0], [399.0, 433.0]], ['contributors whohave been involved in the', 0.9592447]]
+[[[441.0, 174.0], [1166.0, 176.0], [1165.0, 222.0], [441.0, 221.0]], ('ACKNOWLEDGEMENTS', 0.9971134662628174)]
+[[[403.0, 346.0], [1204.0, 348.0], [1204.0, 384.0], [402.0, 383.0]], ('We would like to thank all the designers and', 0.9761400818824768)]
+[[[403.0, 396.0], [1204.0, 398.0], [1204.0, 434.0], [402.0, 433.0]], ('contributors who have been involved in the', 0.9791957139968872)]
 ......
 ```
 
@@ -205,7 +205,7 @@ paddleocr --image_dir PaddleOCR/doc/imgs_words_en/word_10.png --use_angle_cls tr
 
 Output will be a list, each item contains text and recognition confidence
 ```bash
-['PAIN', 0.990372]
+['PAIN', 0.9934559464454651]
 ```
 
 * only detection
@@ -215,9 +215,9 @@ paddleocr --image_dir PaddleOCR/doc/imgs_en/img_12.jpg --rec false
 
 Output will be a list, each item only contains bounding box
 ```bash
-[[756.0, 812.0], [805.0, 812.0], [805.0, 830.0], [756.0, 830.0]]
-[[820.0, 803.0], [1085.0, 801.0], [1085.0, 836.0], [820.0, 838.0]]
-[[393.0, 801.0], [715.0, 805.0], [715.0, 839.0], [393.0, 836.0]]
+[[397.0, 802.0], [1092.0, 802.0], [1092.0, 841.0], [397.0, 841.0]]
+[[397.0, 750.0], [1211.0, 750.0], [1211.0, 789.0], [397.0, 789.0]]
+[[397.0, 702.0], [1209.0, 698.0], [1209.0, 734.0], [397.0, 738.0]]
 ......
 ```
 
@@ -228,7 +228,7 @@ paddleocr --image_dir PaddleOCR/doc/imgs_words_en/word_10.png --det false --lang
 
 Output will be a list, each item contains text and recognition confidence
 ```bash
-['PAIN', 0.990372]
+['PAIN', 0.9934559464454651]
 ```
 
 * only classification
@@ -342,13 +342,13 @@ im_show.save('result.jpg')
 | det_db_thresh           | Binarization threshold value of DB output map                                                                                                                                                                                        | 0.3                     |
 | det_db_box_thresh       | The threshold value of the DB output box. Boxes score lower than this value will be discarded                                                                                                                                                                         | 0.5                     |
 | det_db_unclip_ratio     | The expanded ratio of DB output box                                                                                                                                                                                             | 2                       |
+| det_db_score_mode |  The parameter that control how the score of the detection frame is calculated. There are 'fast' and 'slow' options. If the text to be detected is curved, it is recommended to use 'slow'  | 'fast' |
 | det_east_score_thresh   | Binarization threshold value of EAST output map                                                                                                                                                                                       | 0.8                     |
 | det_east_cover_thresh   | The threshold value of the EAST output box. Boxes score lower than this value will be discarded                                                                                                                                                                         | 0.1                     |
 | det_east_nms_thresh     | The NMS threshold value of EAST model output box                                                                                                                                                                                              | 0.2                     |
 | rec_algorithm           | Type of recognition algorithm selected                                                                                                                                                                                                | CRNN                    |
 | rec_model_dir           | the text recognition inference model folder. There are two ways to transfer parameters, 1. None: Automatically download the built-in model to `~/.paddleocr/rec`; 2. The path of the inference model converted by yourself, the model and params files must be included in the model path | None |
 | rec_image_shape         | image shape of recognition algorithm                                                                                                                                                                                            | "3,32,320"              |
-| rec_char_type           | Character type of recognition algorithm, Chinese (ch) or English (en)                                                                                                                                                                               | ch                      |
 | rec_batch_num           | When performing recognition, the batchsize of forward images                                                                                                                                                                                         | 30                      |
 | max_text_length         | The maximum text length that the recognition algorithm can recognize                                                                                                                                                                                         | 25                      |
 | rec_char_dict_path      | the alphabet path which needs to be modified to your own path when `rec_model_Name` use mode 2                                                                                                                                              | ./ppocr/utils/ppocr_keys_v1.txt                        |
@@ -365,5 +365,6 @@ im_show.save('result.jpg')
 | det                     | Enable detction when `ppocr.ocr` func exec                                                                                                                                                                                                   | TRUE                    |
 | rec                     | Enable recognition when `ppocr.ocr` func exec                                                                                                                                                                                                   | TRUE                    |
 | cls                     | Enable classification when `ppocr.ocr` func exec((Use use_angle_cls in command line mode to control whether to start classification in the forward direction)                                                                                                                                                                                                   | FALSE                    |
-| show_log                     | Whether to print log in det and rec | FALSE                    |
+| show_log                     | Whether to print log| FALSE                    |
 | type                     | Perform ocr or table structuring, the value is selected in ['ocr','structure']                                                                                                                                                                                             | ocr                    |
+| ocr_version                     | OCR Model version number, the current model support list is as follows: PP-OCRv3 supports Chinese and English detection, recognition, multilingual recognition, direction classifier models, PP-OCRv2 support Chinese detection and recognition model, PP-OCR support Chinese detection, recognition and direction classifier, multilingual recognition model | PP-OCRv3                 |

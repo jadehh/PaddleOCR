@@ -17,13 +17,14 @@ import subprocess
 
 __dir__ = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(__dir__)
-sys.path.append(os.path.abspath(os.path.join(__dir__, '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(__dir__, '../..')))
 
 os.environ["FLAGS_allocator_strategy"] = 'auto_growth'
 
 import cv2
 import copy
 import numpy as np
+import json
 import time
 import logging
 from PIL import Image
@@ -31,7 +32,7 @@ import tools.infer.utility as utility
 import tools.infer.predict_rec as predict_rec
 import tools.infer.predict_det as predict_det
 import tools.infer.predict_cls as predict_cls
-from ppocr.utils.utility import get_image_file_list, check_and_read_gif
+from ppocr.utils.utility import get_image_file_list, check_and_read
 from ppocr.utils.logging import get_logger
 from tools.infer.utility import draw_ocr_box_txt, get_rotate_crop_image
 logger = get_logger()
@@ -49,16 +50,26 @@ class TextSystem(object):
         if self.use_angle_cls:
             self.text_classifier = predict_cls.TextClassifier(args)
 
-    def print_draw_crop_rec_res(self, img_crop_list, rec_res):
+        self.args = args
+        self.crop_image_res_index = 0
+
+    def draw_crop_rec_res(self, output_dir, img_crop_list, rec_res):
+        os.makedirs(output_dir, exist_ok=True)
         bbox_num = len(img_crop_list)
         for bno in range(bbox_num):
-            cv2.imwrite("./output/img_crop_%d.jpg" % bno, img_crop_list[bno])
-            logger.info(bno, rec_res[bno])
+            cv2.imwrite(
+                os.path.join(output_dir,
+                             f"mg_crop_{bno+self.crop_image_res_index}.jpg"),
+                img_crop_list[bno])
+            logger.debug(f"{bno}, {rec_res[bno]}")
+        self.crop_image_res_index += bbox_num
 
     def __call__(self, img, cls=True):
+        time_dict = {'det': 0, 'rec': 0, 'csl': 0, 'all': 0}
+        start = time.time()
         ori_im = img.copy()
         dt_boxes, elapse = self.text_detector(img)
-
+        time_dict['det'] = elapse
         logger.debug("dt_boxes num : {}, elapse : {}".format(
             len(dt_boxes), elapse))
         if dt_boxes is None:
@@ -74,20 +85,26 @@ class TextSystem(object):
         if self.use_angle_cls and cls:
             img_crop_list, angle_list, elapse = self.text_classifier(
                 img_crop_list)
+            time_dict['cls'] = elapse
             logger.debug("cls num  : {}, elapse : {}".format(
                 len(img_crop_list), elapse))
 
         rec_res, elapse = self.text_recognizer(img_crop_list)
+        time_dict['rec'] = elapse
         logger.debug("rec_res num  : {}, elapse : {}".format(
             len(rec_res), elapse))
-        # self.print_draw_crop_rec_res(img_crop_list, rec_res)
+        if self.args.save_crop_res:
+            self.draw_crop_rec_res(self.args.crop_res_save_dir, img_crop_list,
+                                   rec_res)
         filter_boxes, filter_rec_res = [], []
-        for box, rec_reuslt in zip(dt_boxes, rec_res):
-            text, score = rec_reuslt
+        for box, rec_result in zip(dt_boxes, rec_res):
+            text, score = rec_result
             if score >= self.drop_score:
                 filter_boxes.append(box)
-                filter_rec_res.append(rec_reuslt)
-        return filter_boxes, filter_rec_res
+                filter_rec_res.append(rec_result)
+        end = time.time()
+        time_dict['all'] = end - start
+        return filter_boxes, filter_rec_res, time_dict
 
 
 def sorted_boxes(dt_boxes):
@@ -103,11 +120,14 @@ def sorted_boxes(dt_boxes):
     _boxes = list(sorted_boxes)
 
     for i in range(num_boxes - 1):
-        if abs(_boxes[i + 1][0][1] - _boxes[i][0][1]) < 10 and \
-                (_boxes[i + 1][0][0] < _boxes[i][0][0]):
-            tmp = _boxes[i]
-            _boxes[i] = _boxes[i + 1]
-            _boxes[i + 1] = tmp
+        for j in range(i, 0, -1):
+            if abs(_boxes[j + 1][0][1] - _boxes[j][0][1]) < 10 and \
+                    (_boxes[j + 1][0][0] < _boxes[j][0][0]):
+                tmp = _boxes[j]
+                _boxes[j] = _boxes[j + 1]
+                _boxes[j + 1] = tmp
+            else:
+                break
     return _boxes
 
 
@@ -118,6 +138,14 @@ def main(args):
     is_visualize = True
     font_path = args.vis_font_path
     drop_score = args.drop_score
+    draw_img_save_dir = args.draw_img_save_dir
+    os.makedirs(draw_img_save_dir, exist_ok=True)
+    save_results = []
+
+    logger.info(
+        "In PP-OCRv3, rec_image_shape parameter defaults to '3, 48, 320', "
+        "if you are using recognition model with PP-OCRv2 or an older version, please set --rec_image_shape='3,32,320"
+    )
 
     # warm up 10 times
     if args.warmup:
@@ -131,21 +159,29 @@ def main(args):
     count = 0
     for idx, image_file in enumerate(image_file_list):
 
-        img, flag = check_and_read_gif(image_file)
+        img, flag, _ = check_and_read(image_file)
         if not flag:
             img = cv2.imread(image_file)
         if img is None:
-            logger.info("error in loading image:{}".format(image_file))
+            logger.debug("error in loading image:{}".format(image_file))
             continue
         starttime = time.time()
-        dt_boxes, rec_res = text_sys(img)
+        dt_boxes, rec_res, time_dict = text_sys(img)
         elapse = time.time() - starttime
         total_time += elapse
 
-        logger.info(
+        logger.debug(
             str(idx) + "  Predict time of %s: %.3fs" % (image_file, elapse))
         for text, score in rec_res:
-            logger.info("{}, {:.3f}".format(text, score))
+            logger.debug("{}, {:.3f}".format(text, score))
+
+        res = [{
+            "transcription": rec_res[idx][0],
+            "points": np.array(dt_boxes[idx]).astype(np.int32).tolist(),
+        } for idx in range(len(dt_boxes))]
+        save_pred = os.path.basename(image_file) + "\t" + json.dumps(
+            res, ensure_ascii=False) + "\n"
+        save_results.append(save_pred)
 
         if is_visualize:
             image = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -160,19 +196,24 @@ def main(args):
                 scores,
                 drop_score=drop_score,
                 font_path=font_path)
-            draw_img_save = "./inference_results/"
-            if not os.path.exists(draw_img_save):
-                os.makedirs(draw_img_save)
             if flag:
                 image_file = image_file[:-3] + "png"
             cv2.imwrite(
-                os.path.join(draw_img_save, os.path.basename(image_file)),
+                os.path.join(draw_img_save_dir, os.path.basename(image_file)),
                 draw_img[:, :, ::-1])
-            logger.info("The visualized image saved in {}".format(
-                os.path.join(draw_img_save, os.path.basename(image_file))))
+            logger.debug("The visualized image saved in {}".format(
+                os.path.join(draw_img_save_dir, os.path.basename(image_file))))
 
     logger.info("The predict total time is {}".format(time.time() - _st))
-    logger.info("\nThe predict total time is {}".format(total_time))
+    if args.benchmark:
+        text_sys.text_detector.autolog.report()
+        text_sys.text_recognizer.autolog.report()
+
+    with open(
+            os.path.join(draw_img_save_dir, "system_results.txt"),
+            'w',
+            encoding='utf-8') as f:
+        f.writelines(save_results)
 
 
 if __name__ == "__main__":
