@@ -15,6 +15,7 @@
   * [2.6 Training with knowledge distillation](#kd)
   * [2.7 Multi-language Training](#Multi_language)
   * [2.8 Training on other platform(Windows/macOS/Linux DCU)](#28)
+  * [2.9 Fine-tuning](#29)
 - [3. Evaluation and Test](#3-evaluation-and-test)
   * [3.1 Evaluation](#31-evaluation)
   * [3.2 Test](#32-test)
@@ -229,7 +230,7 @@ If you expect to load trained model and continue the training again, you can spe
 
 For example:
 ```shell
-python3 tools/train.py -c configs/rec/container_number_rec_CRNN_H.yml -o Global.checkpoints=./your/trained/model
+python3 tools/train.py -c configs/rec/rec_icdar15_train.yml -o Global.checkpoints=./your/trained/model
 ```
 
 **Note**: The priority of `Global.checkpoints` is higher than that of `Global.pretrained_model`, that is, when two parameters are specified at the same time, the model specified by `Global.checkpoints` will be loaded first. If the model path specified by `Global.checkpoints` is wrong, the one specified by `Global.pretrained_model` will be loaded.
@@ -291,7 +292,7 @@ After adding the four-part modules of the network, you only need to configure th
 If you want to speed up your training further, you can use [Auto Mixed Precision Training](https://www.paddlepaddle.org.cn/documentation/docs/zh/guides/01_paddle2.0_introduction/basic_concept/amp_cn.html), taking a single machine and a single gpu as an example, the commands are as follows:
 
 ```shell
-python3 tools/train.py -c configs/rec/container_number_rec_CRNN_H.yml \
+python3 tools/train.py -c configs/rec/rec_icdar15_train.yml \
      -o Global.pretrained_model=./pretrain_models/rec_mv3_none_bilstm_ctc_v2.0_train \
      Global.use_amp=True Global.scale_loss=1024.0 Global.use_dynamic_loss_scaling=True
  ```
@@ -302,7 +303,7 @@ python3 tools/train.py -c configs/rec/container_number_rec_CRNN_H.yml \
 During multi-machine multi-gpu training, use the `--ips` parameter to set the used machine IP address, and the `--gpus` parameter to set the used GPU ID:
 
 ```bash
-python3 -m paddle.distributed.launch --ips="xx.xx.xx.xx,xx.xx.xx.xx" --gpus '0,1,2,3' tools/train.py -c configs/rec/container_number_rec_CRNN_H.yml \
+python3 -m paddle.distributed.launch --ips="xx.xx.xx.xx,xx.xx.xx.xx" --gpus '0,1,2,3' tools/train.py -c configs/rec/rec_icdar15_train.yml \
      -o Global.pretrained_model=./pretrain_models/rec_mv3_none_bilstm_ctc_v2.0_train
 ```
 
@@ -383,6 +384,11 @@ GPU mode is not supported, you need to set `use_gpu` to False in the configurati
 
 - Linux DCU
 Running on a DCU device requires setting the environment variable `export HIP_VISIBLE_DEVICES=0,1,2,3`, and the rest of the training and evaluation prediction commands are exactly the same as the Linux GPU.
+
+<a name="29"></a>
+## 2.9 Fine-tuning
+
+In actual use, it is recommended to load the official pre-trained model and fine-tune it in your own data set. For the fine-tuning method of the recognition model, please refer to: [Model Fine-tuning Tutorial](./finetune_en.md).
 
 <a name="3-evaluation-and-test"></a>
 ## 3. Evaluation and Test
