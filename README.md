@@ -2,8 +2,7 @@
 
 ### DockerÆô¶¯
 ```bash
-
-
+python tools/train.py -c configs/det/container/container_PP-OCRv2_det_cml.yml
 ```
 
 ### Ä£ÐÍÑµÁ·
